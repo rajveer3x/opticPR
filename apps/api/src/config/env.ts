@@ -1,15 +1,8 @@
 import "dotenv/config";
 
-const requiredEnvironmentVariables = [
-  "DATABASE_URL",
-  "GITHUB_WEBHOOK_SECRET",
-] as const;
+type RequiredEnvironmentVariable = "DATABASE_URL" | "GITHUB_WEBHOOK_SECRET";
 
-type RequiredEnvironmentVariable = (typeof requiredEnvironmentVariables)[number];
-
-const readRequiredEnvironmentVariable = (
-  name: RequiredEnvironmentVariable,
-): string => {
+const readRequiredEnvironmentVariable = (name: RequiredEnvironmentVariable): string => {
   const value = process.env[name];
 
   if (value === undefined || value.trim() === "") {
@@ -21,9 +14,7 @@ const readRequiredEnvironmentVariable = (
 
 export const env = {
   DATABASE_URL: readRequiredEnvironmentVariable("DATABASE_URL"),
-  GITHUB_WEBHOOK_SECRET: readRequiredEnvironmentVariable(
-    "GITHUB_WEBHOOK_SECRET",
-  ),
+  GITHUB_WEBHOOK_SECRET: readRequiredEnvironmentVariable("GITHUB_WEBHOOK_SECRET"),
   PORT: Number.parseInt(process.env.PORT ?? "3000", 10),
 } as const;
 

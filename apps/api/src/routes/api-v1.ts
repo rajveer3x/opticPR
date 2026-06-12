@@ -1,3 +1,3 @@
 import { Router } from "express";
 
-export const apiV1Router = Router();
+export const apiV1Router: Router = Router();

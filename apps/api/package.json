@@ -9,13 +9,16 @@
     "clean:dist": "node -e \"import('node:fs/promises').then(({ rm }) => rm('dist', { recursive: true, force: true }))\"",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
+    "start:worker": "node dist/workers/pr-review-worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "worker": "tsx watch src/workers/pr-review-worker.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
+    "bullmq": "^5.56.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0"
   },
