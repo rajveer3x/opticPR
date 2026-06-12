@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "composite": true,
+    "declaration": false,
+    "declarationMap": false,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "postcss.config.js",
+    "tailwind.config.ts",
+    "vite.config.ts"
+  ]
+}
