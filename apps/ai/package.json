@@ -1,0 +1,20 @@
+{
+  "name": "@opticpr/ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node --run clean:dist",
+    "clean:dist": "node -e \"import('node:fs/promises').then(({ rm }) => rm('dist', { recursive: true, force: true }))\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "ollama": "^0.5.16",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29"
+  }
+}
