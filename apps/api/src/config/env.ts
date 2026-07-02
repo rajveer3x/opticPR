@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env.js";
 
 type RequiredEnvironmentVariable = "DATABASE_URL" | "GITHUB_WEBHOOK_SECRET";
 

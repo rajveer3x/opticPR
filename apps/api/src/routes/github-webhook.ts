@@ -19,14 +19,21 @@ function isPullRequestOpenedPayload(value: unknown): value is PullRequestOpenedP
   const repository = payload.repository;
 
   return (
-    payload.action === "opened" &&
+    (payload.action === "opened" || payload.action === "synchronize") &&
     typeof pullRequest === "object" &&
     pullRequest !== null &&
     typeof (pullRequest as Record<string, unknown>).id === "number" &&
     typeof (pullRequest as Record<string, unknown>).number === "number" &&
+    typeof (pullRequest as Record<string, unknown>).diff_url === "string" &&
     typeof repository === "object" &&
     repository !== null &&
-    typeof (repository as Record<string, unknown>).id === "number"
+    typeof (repository as Record<string, unknown>).id === "number" &&
+    typeof (repository as Record<string, unknown>).name === "string" &&
+    typeof (repository as Record<string, unknown>).full_name === "string" &&
+    typeof (repository as Record<string, unknown>).owner === "object" &&
+    (repository as Record<string, unknown>).owner !== null &&
+    typeof ((repository as Record<string, unknown>).owner as Record<string, unknown>).login ===
+      "string"
   );
 }
 
@@ -66,7 +73,7 @@ githubWebhookRouter.post(
     if (
       typeof payload !== "object" ||
       payload === null ||
-      (payload as Record<string, unknown>).action !== "opened"
+      !["opened", "synchronize"].includes(String((payload as Record<string, unknown>).action))
     ) {
       response.status(202).json({ status: "ignored" });
       return;
@@ -78,7 +85,13 @@ githubWebhookRouter.post(
     }
 
     try {
-      await prReviewQueue.add("pull_request.opened", payload, {
+      const deliveryId = request.header("x-github-delivery");
+
+      if (deliveryId !== undefined) {
+        payload.deliveryId = deliveryId;
+      }
+
+      await prReviewQueue.add(`pull_request.${payload.action}`, payload, {
         jobId: createPullRequestOpenedJobId(payload),
       });
     } catch (error) {

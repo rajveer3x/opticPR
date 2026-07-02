@@ -16,10 +16,7 @@ export function verifyGithubSignature(
     return;
   }
 
-  const expectedSignature = `sha256=${createHmac(
-    "sha256",
-    env.GITHUB_WEBHOOK_SECRET,
-  )
+  const expectedSignature = `sha256=${createHmac("sha256", env.GITHUB_WEBHOOK_SECRET)
     .update(request.body)
     .digest("hex")}`;
   const providedBuffer = Buffer.from(signature);

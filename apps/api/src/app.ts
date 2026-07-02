@@ -1,5 +1,6 @@
 import express from "express";
 
+import { cors } from "./middleware/cors.js";
 import { apiV1Router } from "./routes/api-v1.js";
 import { githubWebhookRouter } from "./routes/github-webhook.js";
 import { healthRouter } from "./routes/health.js";
@@ -7,6 +8,7 @@ import { healthRouter } from "./routes/health.js";
 export function createApp(): express.Express {
   const app = express();
 
+  app.use(cors);
   app.use("/health", healthRouter);
   app.use("/webhooks/github", githubWebhookRouter);
   app.use(express.json());

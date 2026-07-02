@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./agents/pr-review": {
+      "types": "./dist/agents/prReviewAgent.d.ts",
+      "default": "./dist/agents/prReviewAgent.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "node --run clean:dist",

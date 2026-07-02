@@ -5,41 +5,26 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: [
-      "**/coverage/**",
-      "**/dist/**",
-      "**/node_modules/**"
-    ]
+    ignores: ["**/coverage/**", "**/dist/**", "**/node_modules/**"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
   {
-    files: [
-      "**/*.ts",
-      "**/*.tsx",
-      "**/*.mts",
-      "**/*.cts"
-    ],
+    files: ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
     languageOptions: {
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: import.meta.dirname
-      }
-    }
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
   },
   {
-    files: [
-      "**/*.js",
-      "**/*.mjs",
-      "**/*.cjs"
-    ],
-    extends: [
-      tseslint.configs.disableTypeChecked
-    ],
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs"],
+    extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
-      globals: globals.node
-    }
+      globals: globals.node,
+    },
   },
-  prettierRecommended
+  prettierRecommended,
 );

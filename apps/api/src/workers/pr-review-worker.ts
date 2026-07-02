@@ -1,16 +1,27 @@
 import { Worker } from "bullmq";
 import type { Job } from "bullmq";
+import { runPullRequestReview } from "@opticpr/ai/agents/pr-review";
 
 import { redisConnection } from "../config/redis.js";
 import { PR_REVIEW_QUEUE_NAME } from "../queues/names.js";
 import type { PullRequestOpenedPayload } from "../queues/pr-review.js";
+import { fetchPullRequestDiff, publishGitHubReview } from "../services/githubReviewService.js";
 
-function processPrReviewJob(job: Job<PullRequestOpenedPayload>): Promise<void> {
+async function processPrReviewJob(job: Job<PullRequestOpenedPayload>): Promise<void> {
+  const owner = job.data.repository.owner.login;
+  const repo = job.data.repository.name;
+  const pullNumber = job.data.pull_request.number;
+
   process.stdout.write(
-    `Received ${job.name} job ${job.id ?? "unknown"} for pull request ${job.data.pull_request.number}\n`,
+    `Received ${job.name} job ${job.id ?? "unknown"} for ${owner}/${repo}#${pullNumber}\n`,
   );
 
-  return Promise.resolve();
+  const diff = await fetchPullRequestDiff(owner, repo, pullNumber);
+  const review = await runPullRequestReview(diff);
+
+  await publishGitHubReview(owner, repo, pullNumber, review);
+
+  process.stdout.write(`Published AI review for ${owner}/${repo}#${pullNumber}\n`);
 }
 
 const worker = new Worker<PullRequestOpenedPayload>(PR_REVIEW_QUEUE_NAME, processPrReviewJob, {
