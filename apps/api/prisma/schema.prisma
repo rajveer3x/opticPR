@@ -30,9 +30,21 @@ model Repository {
 model PullRequest {
   id           String     @id @default(uuid()) @db.Uuid
   githubPrId   String
+  number       Int        @default(0)
   title        String
   description  String
   status       String
+  riskScore    Int        @default(0)
+  reviewStatus String     @default("QUEUED")
+  sourceBranch String     @default("")
+  targetBranch String     @default("")
+  additions    Int        @default(0)
+  deletions    Int        @default(0)
+  changedFiles Int        @default(0)
+  htmlUrl      String     @default("")
+  summary      String     @default("")
+  issues       Json       @default("[]")
+  alerts       Json       @default("[]")
   repositoryId String     @db.Uuid
   authorId     String     @db.Uuid
   createdAt    DateTime   @default(now())

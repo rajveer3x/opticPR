@@ -1,106 +1,102 @@
 import { Router } from "express";
+import { prisma } from "../config/prisma.js";
 
 export const pullRequestsRouter: Router = Router();
 
-const mockPullRequests = [
-  {
-    id: 1,
-    number: 1,
-    title: "Add insecure code",
-    repository: "rajveer3x/opticpr-test",
-    status: "OPEN",
-  },
-];
+// GET /api/v1/pull-requests
+pullRequestsRouter.get("/", async (req, res) => {
+  try {
+    const prs = await prisma.pullRequest.findMany({
+      orderBy: { updatedAt: "desc" },
+      include: {
+        repository: true,
+        author: true,
+      },
+    });
 
-const frontendMockPullRequests = {
-  items: [
-    {
-      id: "1",
-      number: 1,
-      title: "Add insecure code",
+    const formattedPrs = prs.map((pr) => ({
+      id: pr.id,
+      number: pr.number || parseInt(pr.githubPrId, 10),
+      title: pr.title,
       repository: {
-        id: "repo-1",
-        owner: "rajveer3x",
-        name: "opticpr-test",
-        fullName: "rajveer3x/opticpr-test",
+        id: pr.repository.id,
+        owner: pr.repository.owner,
+        name: pr.repository.name,
+        fullName: `${pr.repository.owner}/${pr.repository.name}`,
       },
       author: {
-        login: "rajveer3x",
-        avatarUrl: "https://avatars.githubusercontent.com/u/1000?v=4",
+        login: pr.author.name,
+        avatarUrl: `https://avatars.githubusercontent.com/u/${pr.author.githubId}?v=4`,
       },
-      status: "OPEN",
-      riskScore: 85,
-      reviewStatus: "COMPLETED",
-      updatedAt: new Date().toISOString(),
-    },
-  ],
-  total: 1,
-};
+      status: pr.status,
+      riskScore: pr.riskScore,
+      reviewStatus: pr.reviewStatus,
+      updatedAt: pr.updatedAt.toISOString(),
+    }));
 
-pullRequestsRouter.get("/", (req, res) => {
-  const origin = req.header("origin");
-  const referer = req.header("referer");
-  const isFrontend =
-    (origin?.includes("localhost:5173") ?? false) || (referer?.includes("localhost:5173") ?? false);
-
-  if (isFrontend) {
-    res.json(frontendMockPullRequests);
-  } else {
-    res.json(mockPullRequests);
+    res.json({
+      items: formattedPrs,
+      total: formattedPrs.length,
+    });
+  } catch (error) {
+    console.error("Error fetching pull requests:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-pullRequestsRouter.get("/:id", (req, res) => {
-  const id = req.params.id;
-  if (id === "1") {
+// GET /api/v1/pull-requests/:id
+pullRequestsRouter.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Validate UUID format securely
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: "Invalid PR ID format" });
+    }
+
+    const pr = await prisma.pullRequest.findUnique({
+      where: { id },
+      include: {
+        repository: true,
+        author: true,
+      },
+    });
+
+    if (!pr) {
+      return res.status(404).json({ error: "Pull request not found" });
+    }
+
     res.json({
-      id: "1",
-      number: 1,
-      title: "Add insecure code",
+      id: pr.id,
+      number: pr.number || parseInt(pr.githubPrId, 10),
+      title: pr.title,
       repository: {
-        id: "repo-1",
-        owner: "rajveer3x",
-        name: "opticpr-test",
-        fullName: "rajveer3x/opticpr-test",
+        id: pr.repository.id,
+        owner: pr.repository.owner,
+        name: pr.repository.name,
+        fullName: `${pr.repository.owner}/${pr.repository.name}`,
       },
       author: {
-        login: "rajveer3x",
-        avatarUrl: "https://avatars.githubusercontent.com/u/1000?v=4",
+        login: pr.author.name,
+        avatarUrl: `https://avatars.githubusercontent.com/u/${pr.author.githubId}?v=4`,
       },
-      status: "OPEN",
-      riskScore: 85,
-      reviewStatus: "COMPLETED",
-      updatedAt: new Date().toISOString(),
-      sourceBranch: "feature/insecure-code",
-      targetBranch: "main",
-      additions: 45,
-      deletions: 12,
-      changedFiles: 3,
-      htmlUrl: "https://github.com/rajveer3x/opticpr-test/pull/1",
-      summary:
-        "### AI Summary\n\nThis pull request introduces critical security risks by adding hardcoded credentials and unsafe SQL queries.",
-      issues: [
-        {
-          id: "issue-1",
-          severity: "HIGH",
-          file: "src/db.ts",
-          line: 15,
-          description: "SQL injection vulnerability detected in database query.",
-          suggestion: "Use parameterized queries instead of string concatenation.",
-        },
-      ],
-      alerts: [
-        {
-          id: "alert-1",
-          severity: "CRITICAL",
-          type: "Hardcoded Credentials",
-          file: "src/config.ts",
-          description: "API keys are hardcoded in the configuration file.",
-          recommendation: "Use environment variables to store secrets.",
-        },
-      ],
+      status: pr.status,
+      riskScore: pr.riskScore,
+      reviewStatus: pr.reviewStatus,
+      updatedAt: pr.updatedAt.toISOString(),
+      sourceBranch: pr.sourceBranch,
+      targetBranch: pr.targetBranch,
+      additions: pr.additions,
+      deletions: pr.deletions,
+      changedFiles: pr.changedFiles,
+      htmlUrl: pr.htmlUrl,
+      summary: pr.summary,
+      issues: pr.issues,
+      alerts: pr.alerts,
     });
-  } else {
-    res.status(404).json({ error: "Pull request not found" });
+  } catch (error) {
+    console.error("Error fetching pull request details:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
