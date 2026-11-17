@@ -1,5 +1,7 @@
 # OpticPR
 
+**Operating scope — November 18, 2026:** This is a local-only CV/portfolio project. Public hosting is disabled at the user’s request. Keep services on loopback; do not start public tunnels, expose the Mac, or provision hosting unless the user explicitly requests hosting again. Recorded demos, local benchmarks and recovery evidence are the portfolio deliverables.
+
 OpticPR provides an authenticated review dashboard, replays a synthetic pagination PR, and accepts signed GitHub App events through a durable PostgreSQL outbox and a Redis/BullMQ worker. The fixture needs no GitHub or model credentials. The API and worker run on the host; Compose runs the two dependencies.
 
 ## Setup
@@ -180,7 +182,7 @@ The publisher polls durable intent once per second. PostgreSQL transaction advis
 
 Before each write the publisher reads live revisions and compares both SHAs and the desired key. It writes one conversation comment beginning with `<!-- opticpr:summary:<repository-id>:<pr-number> -->`, includes full base/head SHAs and the reviewed SHA/run, and stores the comment ID. It lists all comment pages to recover a successful create whose response was lost. Recovery accepts only comments authored by this GitHub App; user copies and other apps' comments cannot claim the marker. A deleted comment is recreated on retry. GitHub's [issue comment endpoints](https://docs.github.com/en/rest/issues/comments) accept Pull requests: write for these mutations. Existing installations must approve the updated App permission before publication can succeed.
 
-The publisher rechecks revisions after writing. If a push or base retarget landed during the request, it records the new pair as durable work and updates the same comment to say the new comparison is pending. Once that report completes, the same comment receives its review. Reconciliation is bounded to three changing revisions per tick, with remaining work kept in PostgreSQL. New GitHub runs include static findings and independently verified model proposals. The summary labels partial or unknown coverage, retains static alerts when enrichment fails, and includes paths, line numbers, excerpts and verification guidance.
+The publisher rechecks revisions after writing. If a push or base retarget landed during the request, it records the new pair as durable work and updates the same comment to say the new comparison is pending. Once that report completes, the same comment receives its review. Reconciliation is bounded to three changing revisions per tick, with remaining work kept in PostgreSQL. New GitHub runs include static findings; opt-in model proposals must pass independent evidence validation. The summary labels partial or unknown coverage, retains static alerts when enrichment fails, and includes paths, line numbers, excerpts and verification guidance.
 
 `ReviewPublication.state` is `pending`, `waiting` for a report, `published`, `failed`, or `cancelled`. Network/configuration errors retry up to three attempts per intended revision. `nextAttemptAt` honors `Retry-After`, exhausted primary-rate-limit reset times and secondary-limit delays, plus exponential backoff and jitter, following [GitHub's retry guidance](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api). After exhaustion, the intended run, exact revisions, attempt count and sanitized diagnostics remain stored. Repository removal, suspension or uninstall cancels outstanding publication.
 
@@ -216,7 +218,7 @@ ollama pull qwen2.5-coder:7b
 OLLAMA_NUM_PARALLEL=1 OLLAMA_HOST=127.0.0.1:11434 ollama serve
 ```
 
-Run Ollama in a separate terminal and start the worker normally. `OLLAMA_URL` defaults to `http://127.0.0.1:11434` and accepts only loopback HTTP origins. The worker verifies the installed model manifest digest is `dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364` before generation. A different or unavailable model produces partial coverage while retaining static findings. Model, prompt, rules, grammar revisions and budgets are part of logical run identity. The default remains 4096 context tokens and function context. The credential-free fixture replay retains its deterministic stub; the benchmark opts that same fixture into real local analysis.
+Model enrichment is disabled by default after the feature 08 quality comparison found no verified additional defect. Set `MODEL_ENRICHMENT_ENABLED=1` in `.env` to opt in, then restart the worker. Run Ollama in a separate terminal. `OLLAMA_URL` defaults to `http://127.0.0.1:11434` and accepts only loopback HTTP origins. The worker verifies the installed model manifest digest is `dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364` before generation. A different or unavailable model produces partial coverage while retaining static findings. Model, prompt, rules, grammar revisions and budgets are part of logical run identity. Opt-in enrichment uses 4096 context tokens and function context. The credential-free fixture replay retains its deterministic stub; the benchmark opts that same fixture into real local analysis.
 
 The worker reads at most 20 eligible changed JS/TS head files and 800 added/deleted lines. It skips deleted files, missing patches, unsupported types, dependencies, lockfiles, generated output, unsafe paths, binary/invalid UTF-8 data, files above 128 KiB, and recognizable secret files or embedded credentials. Skip reasons and scanner errors remain in coverage. Secret detection is deliberately conservative and does not replace a dedicated secrets scanner. Semgrep receives only the selected SHA-addressed snapshot, mounted read-only into a digest-pinned container with no network, no capabilities, a read-only root, non-root user, bounded CPU/memory/processes and a 45-second process deadline. No reviewed code or repository configuration is executed. Three checked-in rules cover dynamic evaluation, disabled certificate verification and a possibly decremented exclusive slice boundary; “complete” coverage is limited to those rules and bounded context.
 
@@ -258,7 +260,7 @@ pnpm run:inspect <moved-run-id>
 pnpm run:inspect <fixed-run-id>
 ```
 
-Keep each printed run ID. The original condition is at line 3, the header moves it to line 5, and the fixed snapshot records the successful recheck with the line-5 evidence still available. Named scenarios use local analysis; replay without arguments retains the original deterministic fixture stub and its distinct configuration. Ollama is optional for retaining the static result; unavailable enrichment is labeled partial. Regenerate the bundle and scenario SHAs with `python3 scripts/build-fixture.py`.
+Keep each printed run ID. The original condition is at line 3, the header moves it to line 5, and the fixed snapshot records the successful recheck with the line-5 evidence still available. Named scenarios use local analysis; replay without arguments retains the original deterministic fixture stub and its distinct configuration. Named replay uses static analysis by default. Opt in with `MODEL_ENRICHMENT_ENABLED=1`; an unavailable opted-in model produces partial coverage while preserving static findings. Regenerate the bundle and scenario SHAs with `python3 scripts/build-fixture.py`.
 
 Maintainers can append decisions in the dashboard, and local operators can use the CLI using an ID from `report.history.findings`:
 
@@ -270,3 +272,29 @@ pnpm finding:decide <run-id> <finding-id> reopen 'raj' 'Needs another review'
 Actor and reason are required; the selected run must contain a confirmed observation in that PR. Each command returns a decision UUID, append sequence and time. Supply the returned UUID as the optional final argument when retrying an uncertain response; reuse with different content fails. Decisions never modify past reports. The latest decision carries to the next unambiguous observation, and an uncertain match carries none. Fixture inspection returns the append-only decision audit separately from the frozen report. GitHub summaries include finding-history outcomes and any decision carried into that snapshot; authenticated GitHub report/decision HTTP access is described in the dashboard section.
 
 `pnpm test` covers normalization, matching, source grouping and conservative clearing. `pnpm test:integration` exercises the real Git commits and pinned Semgrep through the normal BullMQ worker, checks historical snapshots over HTTP, and executes only the trusted synthetic pagination function for the boundary assertions. Inference is injected in these tests, so no model or GitHub credentials are needed.
+
+
+## Evaluation and release
+
+Feature 08 adds a [sealed 30-PR dataset](fixtures/evaluation/cases.json), [measured comparison](context/evaluation/08-results.md), [recovery trace](context/releases/08-recovery.json), [three-minute evidence demo](context/releases/08-demo.webm), and [deployment/recovery runbook](context/releases/08-runbook.md). The corpus contains 12 single-defect, six multi-defect and 12 clean TypeScript changes across pagination, parsing and state updates. Ten cases are reserved for tuning and twenty for evaluation; no prompt tuning was performed. The synthetic author also labeled the cases; independent human review remains outstanding.
+
+Build first, start PostgreSQL/Redis, pull the pinned scanner and make the pinned Ollama model available, then run:
+
+```sh
+# A new output folder is required; existing measurements are never overwritten.
+pnpm evaluation run context/evaluation/my-held-out evaluation
+pnpm evaluation score context/evaluation/my-held-out
+# Optional: score novel model findings with a JSON array of reasoned adjudications.
+pnpm evaluation score context/evaluation/my-held-out /absolute/path/adjudications.json
+# Real isolated database backup/restore and queue/publication recovery drill.
+pnpm ops:recovery
+# Record three minutes of explicitly labeled playback of that recovery trace.
+node scripts/record-demo.mjs
+# Back up the bundled Compose database to a private, previously absent file.
+mkdir -p backups
+pnpm ops:backup backup backups/opticpr.dump
+```
+
+Each adjudication has `caseId`, `arm`, `findingId`, `labelId` (or null for a false finding), `labeler` and `reason`. A model alert's source anchor alone never establishes correctness. Unadjudicated novel alerts block precision reporting and the default-enable gate. The gate requires a complete held-out baseline comparison, at least one additional verified defect, combined precision of at least 80%, valid citations and zero unsafe clearances. Its result is published for review; it does not silently change runtime configuration.
+
+`pnpm test` verifies every sealed synthetic base/head behavior and confirming check, the bundle contents, duplicate/missed/false matching, adjudication and gate behavior. Only these trusted synthetic snippets are executed in the test process; neither the worker nor the evaluation command executes reviewed code. CI uses stub inference for integration tests. Real-model evaluation is an explicit local command. Run it separately from integration, smoke and recovery checks because they share the inference host and deliberately restart dependencies. `REVIEW_QUEUE` can select a separate queue; the default remains `opticpr-reviews`. The fixture smoke test isolates its database schema/queue and disables live GitHub credentials, even when local `.env` contains real App configuration.

@@ -87,6 +87,7 @@ async function start(deadlineMs = 2000) {
 }
 async function finishWorker() { await second?.close(); second = undefined; await worker?.close(); worker = undefined; }
 beforeAll(async () => {
+  process.env.MODEL_ENRICHMENT_ENABLED = '1';
   await admin.$executeRawUnsafe(`CREATE SCHEMA "${namespace}"`);
   const directory = new URL('../packages/database/prisma/migrations/', import.meta.url);
   for (const name of (await readdir(directory)).filter(name => /^\d/.test(name)).sort()) {
@@ -98,6 +99,7 @@ beforeAll(async () => {
   queue = createQueue(namespace); await queue.waitUntilReady();
 }, 30000);
 afterAll(async () => {
+  delete process.env.MODEL_ENRICHMENT_ENABLED;
   await finishWorker(); await queue?.obliterate({ force: true }); await queue?.close(); await db.$disconnect(); await other.$disconnect();
   await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${namespace}" CASCADE`); await admin.$disconnect();
 }, 30000);
@@ -201,4 +203,18 @@ it('records file and changed-line limits and filters excluded source before scan
     { path: 'src/huge.ts', reason: '800-changed-line budget' }, { path: 'src/20.ts', reason: '20-file budget' },
   ]));
   expect(report.coverage.status).toBe('partial');
+});
+
+
+it('keeps model inference opt-in while reporting complete static coverage', async () => {
+  const { runIdentity } = await import('../packages/runtime/src/index.js');
+  const input = { source: 'github' as const, repositoryId: '200', pullRequestNumber: 99, baseSha: 'a'.repeat(40), headSha: 'b'.repeat(40) };
+  const identity = runIdentity(input, githubConfig);
+  const run = await db.reviewRun.create({ data: { ...input, ...identity, configuration: githubConfig, state: 'running' } });
+  let called = false;
+  const report = await analyzeLocal(db, { async revisions() { return input; }, async changedFiles() { return [{ path: 'src/run.ts', hunk: patch }]; }, async fileAt() { return source; }, async close() {} }, input, githubConfig, { runId: run.id, ...identity }, { scanner, inference: async () => { called = true; throw new Error('Must not call inference by default'); } });
+  expect(called).toBe(false);
+  expect(report.findings).toHaveLength(1);
+  expect(report.coverage.status).toBe('complete');
+  expect(report.enrichment).toMatchObject({ status: 'skipped', accepted: 0, rejected: 0 });
 });

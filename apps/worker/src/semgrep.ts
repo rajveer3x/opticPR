@@ -23,20 +23,24 @@ export const scanSemgrep: StaticScanner = async files => {
   if (createHash('sha256').update(rules).digest('hex') !== '2059f3843c09b70962e72aa712f3dc32da49f0dc8b852c0b0b9a117c7663c616') throw new Error('Pinned rules changed');
   const directory = await mkdtemp(join(tmpdir(), 'opticpr-scan-'));
   const name = `opticpr-scan-${randomUUID()}`;
+  const snapshotDirectory = join(directory, 'source');
+  const snapshotRules = join(directory, 'rules.json');
   try {
+    await mkdir(snapshotDirectory);
+    await writeFile(snapshotRules, rules, { mode: 0o444 });
     for (const file of files) {
       // Only sanitized paths from snapshot selection are accepted, even for callers outside the worker.
       if (!file.path || file.path.startsWith('/') || file.path.includes('\\') || file.path.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Invalid snapshot path');
-      const target = join(directory, file.path);
+      const target = join(snapshotDirectory, file.path);
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, file.source, { mode: 0o444 });
     }
-    await chmod(directory, 0o555);
+    await chmod(snapshotDirectory, 0o555);
     const { stdout } = await exec('docker', ['run', '--rm', '--pull=never', '--name', name,
       '--network=none', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '--pids-limit=128',
       '--memory=1g', '--cpus=1', '--user=65534:65534', '--tmpfs=/tmp:rw,noexec,nosuid,size=128m',
       '-e', 'HOME=/tmp', '-e', 'SEMGREP_SEND_METRICS=off', '-e', 'SEMGREP_ENABLE_VERSION_CHECK=0',
-      '-v', `${directory}:/snapshot:ro`, '-v', `${rulesPath}:/rules.json:ro`, '-w', '/snapshot',
+      '-v', `${snapshotDirectory}:/snapshot:ro`, '-v', `${snapshotRules}:/rules.json:ro`, '-w', '/snapshot',
       '--entrypoint=semgrep', semgrepImage, 'scan', '--config=/rules.json', '--json', '--quiet',
       '--metrics=off', '--disable-version-check', '--oss-only', '--no-git-ignore', '--jobs=1', '--timeout=10', '--max-memory=512', '.'],
     { timeout: 45000, maxBuffer: 4 * 1024 * 1024 });
@@ -49,6 +53,6 @@ export const scanSemgrep: StaticScanner = async files => {
   } finally {
     // Killing the CLI alone can leave its container alive after a timeout.
     await exec('docker', ['rm', '-f', name], { timeout: 5000 }).catch(() => {});
-    await chmod(directory, 0o755); await rm(directory, { recursive: true, force: true });
+    await chmod(snapshotDirectory, 0o755).catch(() => {}); await rm(directory, { recursive: true, force: true });
   }
 };

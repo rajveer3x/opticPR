@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "casesSha256": "1afd41de8af570f20065f61dea810de0885c44871a06977011b712206c00652a",
+  "manifestSha256": "8876722286862a98a0b031508c9db2363c5a7bbf0e971c457668719c53a3b776",
+  "bundleSha256": "a0b1dd54c665c57f353f6a04c123c653563db1c8de5bab1b6b5fe721843942de",
+  "splits": {
+    "tuning": [
+      "page-01",
+      "page-03",
+      "page-07",
+      "page-10",
+      "parse-02",
+      "parse-04",
+      "parse-08",
+      "state-01",
+      "state-06",
+      "state-09"
+    ],
+    "evaluation": [
+      "page-02",
+      "page-04",
+      "page-05",
+      "page-06",
+      "page-08",
+      "page-09",
+      "parse-01",
+      "parse-03",
+      "parse-05",
+      "parse-06",
+      "parse-07",
+      "parse-09",
+      "parse-10",
+      "state-02",
+      "state-03",
+      "state-04",
+      "state-05",
+      "state-07",
+      "state-08",
+      "state-10"
+    ]
+  }
+}

@@ -1,0 +1,64 @@
+# Linux host deployment: merge with compose.yaml. Set IMAGE to a repository@sha256 digest.
+services:
+  api:
+    image: ${OPTICPR_IMAGE:?Set OPTICPR_IMAGE to the built repository@sha256 digest}
+    command: ["node", "apps/api/dist/main.js"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://opticpr:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@127.0.0.1:54329/opticpr?schema=public
+      REDIS_URL: redis://127.0.0.1:63799/0
+      FIXTURE_INSPECTION_ENABLED: "0"
+      HOST: 127.0.0.1
+      PORT: "3000"
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:?Set the HTTPS dashboard origin}
+    network_mode: host
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+  worker:
+    image: ${OPTICPR_IMAGE:?Set OPTICPR_IMAGE to the built repository@sha256 digest}
+    command: ["node", "apps/worker/dist/main.js"]
+    # Docker socket access is needed for the existing isolated Semgrep scanner.
+    user: "0:0"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://opticpr:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@127.0.0.1:54329/opticpr?schema=public
+      REDIS_URL: redis://127.0.0.1:63799/0
+      TMPDIR: /var/lib/opticpr/snapshots
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:?Set the HTTPS dashboard origin}
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Docker resolves scanner bind sources on the host: paths must be identical.
+      - /var/lib/opticpr/snapshots:/var/lib/opticpr/snapshots
+    restart: unless-stopped
+    read_only: true
+    depends_on:
+      api: { condition: service_healthy }
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    restart: unless-stopped
+  redis:
+    restart: unless-stopped
+  proxy:
+    image: ${CADDY_IMAGE:?Set CADDY_IMAGE from deploy/images.env}
+    network_mode: host
+    environment:
+      OPTICPR_DOMAIN: ${OPTICPR_DOMAIN:?Set the permanent DNS hostname}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+volumes:
+  caddy-data:
+  caddy-config:

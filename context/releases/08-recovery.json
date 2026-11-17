@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "measuredAt": "2026-11-17T18:35:40.820Z",
+  "environment": "Real PostgreSQL dump/restore and Redis/BullMQ; digest-pinned Semgrep; synthetic bundled source; mocked GitHub remote IDs; deliberately failing model.",
+  "events": [
+    {
+      "at": "2026-11-17T18:35:33.825Z",
+      "name": "static-alert-survived-model-failure",
+      "runId": "7f9de4b6-93db-480a-bfa1-36bc4e4b8bf6",
+      "baseSha": "c92a9a02fefb3d11bb91c60bbf60e332df13b567",
+      "headSha": "7c7d890027156bff7ffe4fd89356ee5234e39f57",
+      "findings": 1,
+      "model": "failed",
+      "remoteCommentId": "mock-summary-1"
+    },
+    {
+      "at": "2026-11-17T18:35:34.851Z",
+      "name": "backup-restored",
+      "sha256": "5bda24afdf07256e2b0b32dd43e9513b7de0011b2c8b2b252ab12008ace53969",
+      "bytes": 48836,
+      "unfinishedRunId": "10320ca9-cbc3-4a53-985b-ee364514c0d1",
+      "restoredState": "running",
+      "restoredPointer": "7f9de4b6-93db-480a-bfa1-36bc4e4b8bf6"
+    },
+    {
+      "at": "2026-11-17T18:35:37.276Z",
+      "name": "unfinished-work-reconciled",
+      "runId": "10320ca9-cbc3-4a53-985b-ee364514c0d1",
+      "logicalKey": "5b9c497bc8ba607e91316a01f4810efdd70adbc4b168f1f1ff1dc15025634af0",
+      "queueLost": true,
+      "resumedState": "running"
+    },
+    {
+      "at": "2026-11-17T18:35:40.649Z",
+      "name": "fix-won-over-late-worker",
+      "lateRunId": "10320ca9-cbc3-4a53-985b-ee364514c0d1",
+      "lateBaseSha": "c92a9a02fefb3d11bb91c60bbf60e332df13b567",
+      "lateHeadSha": "8e6617205c09951e6290633d4a0f83732d90d62b",
+      "fixRunId": "2b9cd34c-1a2a-493e-995d-0cf289a72455",
+      "baseSha": "c92a9a02fefb3d11bb91c60bbf60e332df13b567",
+      "headSha": "2d7946216df77794cb4688745aa60b0a0a51074d",
+      "latestRunId": "2b9cd34c-1a2a-493e-995d-0cf289a72455",
+      "remoteCommentId": "mock-summary-1"
+    },
+    {
+      "at": "2026-11-17T18:35:40.686Z",
+      "name": "redelivery-preserved-one-summary",
+      "deliveryId": "6616445e-d055-47a1-8869-f2425173f2aa",
+      "latestRunId": "2b9cd34c-1a2a-493e-995d-0cf289a72455",
+      "remoteCommentId": "mock-summary-1",
+      "summaryCount": 1,
+      "remoteCreates": 1
+    },
+    {
+      "at": "2026-11-17T18:35:40.820Z",
+      "name": "incomplete-scan-retained-evidence",
+      "runId": "af9dcbdc-3e06-4e51-ae9b-c77dca75286a",
+      "headSha": "0118f77cc4466895d0c20acf3ad4ae88bfe1ccc9",
+      "skippedFiles": [
+        {
+          "path": "src/pages.ts",
+          "reason": "static scanner skipped file"
+        }
+      ],
+      "falseClearances": 0,
+      "states": [
+        "needs_verification"
+      ]
+    }
+  ],
+  "finalSummaryBody": "<!-- opticpr:summary:200:1 -->\n## OpticPR review\n\nHead: `2d7946216df77794cb4688745aa60b0a0a51074d`\nBase: `c92a9a02fefb3d11bb91c60bbf60e332df13b567`\n\nReviewed SHA: `2d7946216df77794cb4688745aa60b0a0a51074d`\nRun: `2b9cd34c-1a2a-493e-995d-0cf289a72455`\n\nCoverage: **partial** (local-js-ts).\nAnalyzed 1 files; 0 changed files in the comparison.\n\n[Open the full review](http://127.0.0.1:5173/runs/2b9cd34c-1a2a-493e-995d-0cf289a72455)\n\nAnalysis is incomplete. An empty finding list does not indicate a clean review.\n\nFindings: 0.\nModel enrichment: skipped; rejected candidates: 0.\n\nFinding history:\n- cleared by recheck: A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one. — src/paginate.ts:3 at `7c7d890027156bff7ffe4fd89356ee5234e39f57`"
+}

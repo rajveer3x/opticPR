@@ -6,7 +6,8 @@ import { configSchema, inputSchema, type AnalysisConfig, type ReviewInput } from
 import { PrismaClient, Prisma } from '@opticpr/database';
 
 export const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' }, pino.destination(2));
-export const queueName = 'opticpr-reviews';
+export const queueName = process.env.REVIEW_QUEUE ?? 'opticpr-reviews';
+if (!/^[A-Za-z0-9_-]{1,100}$/.test(queueName)) throw new Error('Invalid REVIEW_QUEUE');
 export { Queue, Worker } from 'bullmq';
 
 export function redisOptions(): RedisOptions {

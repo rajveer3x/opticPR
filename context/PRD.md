@@ -1,5 +1,7 @@
 # OpticPR product requirements
 
+**Operating scope — November 18, 2026:** This is a local-only CV/portfolio project. Public hosting is disabled at the user’s request. Keep services on loopback; do not start public tunnels, expose the Mac, or provision hosting unless the user explicitly requests hosting again. Recorded demos, local benchmarks and recovery evidence are the portfolio deliverables.
+
 A maintainer opens a PR for the second time. Which findings still need attention after the author’s latest push? OpticPR should answer in the existing GitHub conversation, then let the maintainer inspect the evidence for either revision.
 
 ## First release

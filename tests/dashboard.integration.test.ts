@@ -141,6 +141,7 @@ async function inspect(id = runId, user = maintainer) {
   return runDetailSchema.parse(await response.json());
 }
 beforeAll(async () => {
+  process.env.MODEL_ENRICHMENT_ENABLED = '1';
   await admin.$executeRawUnsafe(`CREATE SCHEMA "${namespace}"`);
   const migrations = new URL(
     '../packages/database/prisma/migrations/',
@@ -231,6 +232,7 @@ beforeAll(async () => {
   findingId = (await inspect()).report!.history!.findings[0]!.findingId;
 }, 30000);
 afterAll(async () => {
+  delete process.env.MODEL_ENRICHMENT_ENABLED;
   await new Promise<void>((resolve) => server?.close(() => resolve()));
   await worker?.close();
   await dispatcher?.close();

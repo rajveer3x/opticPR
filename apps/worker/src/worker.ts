@@ -29,8 +29,11 @@ export function createWorker(db: PrismaClient, name = queueName, clients: GitHub
         githubClient = clients(scope, assertAccess);
         adapter = new GitHubRepositoryAdapter(scope, input.pullRequestNumber, githubClient, input);
       } else {
-        if (configuration.adapter !== 'pagination-bundle-v1') throw new Error('Invalid fixture configuration');
-        adapter = await FixtureRepositoryAdapter.open(input);
+        if (configuration.adapter === 'evaluation-bundle-v1') adapter = await FixtureRepositoryAdapter.openEvaluation(input);
+        else {
+          if (configuration.adapter !== 'pagination-bundle-v1') throw new Error('Invalid fixture configuration');
+          adapter = await FixtureRepositoryAdapter.open(input);
+        }
       }
       const report = configuration.analyzer === 'local-analysis'
         ? await analyzeLocal(db, adapter, input, configuration, { runId, ...identity }, services)

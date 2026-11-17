@@ -1,0 +1,82 @@
+{
+  "measuredAt": "2026-11-17T18:59:11.952Z",
+  "imageId": "sha256:fc536ef84b7aa6caf45c7e8c03c30bd6d11f0fa2b0cc491efb452e9939482b43",
+  "cloudflaredImage": "cloudflare/cloudflared@sha256:e613aadbc2d9511785d2e67a86b0c8ac18dd63a3f9af0d06faf04cbfdcb35f2d",
+  "origin": "https://precious-estimate-blowing-literature.trycloudflare.com",
+  "apiName": "opticpr-release-api-77ad804a",
+  "tunnelName": "opticpr-release-tunnel-77ad804a",
+  "networkName": "opticpr-release-network-77ad804a",
+  "previewPort": "35200",
+  "schema": "release_77ad804a8a5840a6b53f581f4068bf58",
+  "readiness": {
+    "ready": true,
+    "dependencies": {
+      "postgresql": "up",
+      "redis": "up"
+    }
+  },
+  "dns": "Assigned preview hostname resolved via 1.1.1.1 to avoid stale local negative DNS caching; normal HTTPS hostname validation retained.",
+  "fixture": {
+    "runId": "94733c86-8067-4d2f-b41d-868a674f7bf8",
+    "source": "fixture",
+    "repositoryId": "fixture/pagination",
+    "pullRequestNumber": 1,
+    "baseSha": "c92a9a02fefb3d11bb91c60bbf60e332df13b567",
+    "headSha": "7c7d890027156bff7ffe4fd89356ee5234e39f57",
+    "findings": 1
+  },
+  "live": {
+    "runId": "21fe1453-1bd5-4ef6-a476-eb43ae7260dc",
+    "source": "github",
+    "repositoryId": "1279994654",
+    "pullRequestNumber": 4,
+    "baseSha": "9cf9df3bdff868b24fd589851a8b4b44ca11f63a",
+    "headSha": "56ce60ba17be4c037ba201204eef9abd3d9f0028",
+    "coverage": {
+      "status": "complete",
+      "scope": "local-js-ts",
+      "changedFiles": [
+        "index.js"
+      ],
+      "analyzedFiles": [
+        "index.js"
+      ],
+      "skippedFiles": [],
+      "detail": "Coverage is limited to pinned JS/TS static rules. Optional model enrichment is disabled."
+    },
+    "stages": [
+      {
+        "name": "repository",
+        "status": "completed",
+        "source": "github",
+        "version": "github-rest-v1",
+        "detail": "Read SHA-addressed source without executing repository code."
+      },
+      {
+        "name": "semgrep",
+        "status": "completed",
+        "source": "github",
+        "version": "1.144.0/local-js-ts-v1",
+        "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+      },
+      {
+        "name": "model",
+        "status": "skipped",
+        "source": "github",
+        "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+        "detail": "Model enrichment is opt-in pending held-out quality evidence."
+      }
+    ],
+    "findings": 0
+  },
+  "remotePublication": "not started",
+  "limitations": [
+    "Temporary development HTTPS tunnel; expires when its container stops.",
+    "GitHub App OAuth callback registration for this temporary origin was not changed. New-origin sign-in remains a deployment setup step.",
+    "Source/analysis smoke used a read-only installation client; no remote GitHub publication was attempted."
+  ],
+  "cleanup": "docker rm -f opticpr-release-api-77ad804a opticpr-release-tunnel-77ad804a opticpr-release-network-77ad804a; then drop the isolated PostgreSQL schema release_77ad804a8a5840a6b53f581f4068bf58",
+  "status": "Retired at user request: local-only CV project; preview containers and isolated schema removed",
+  "retiredAt": "2026-11-17T19:13:37.278Z",
+  "publicHostingEnabled": false
+}

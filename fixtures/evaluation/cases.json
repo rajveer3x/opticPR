@@ -1,0 +1,990 @@
+{
+  "version": 1,
+  "labeler": "Codex (synthetic author and first labeler)",
+  "disputes": [],
+  "independentReview": false,
+  "splitPolicy": "Reserved before feature-08 execution; no prompt tuning performed. Existing review-v1 prompt predates this dataset. Each group contains one PR base/head pair; no alternative revision crosses the split. Synthetic expectations are not independent human labels.",
+  "cases": [
+    {
+      "id": "page-01",
+      "domain": "pagination",
+      "split": "tuning",
+      "group": "page-01",
+      "kind": "single-defect",
+      "base": "export function page(items: number[], index: number, size: number) {\n  const start = index * size;\n  const end = start + size;\n  return items.slice(start, end);\n}\n",
+      "head": "export function page(items: number[], index: number, size: number) {\n  const start = index * size;\n  const end = start + size - 1;\n  return items.slice(start, end);\n}\n",
+      "labels": [
+        {
+          "id": "page-01-d1",
+          "expectedBehavior": "Include every item up to the exclusive page boundary.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 3,
+            "endLine": 4
+          },
+          "staticRules": [
+            "opticpr.slice-exclusive-boundary"
+          ],
+          "confirmingChecks": [
+            0,
+            1
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "page([1,2,3],0,3)",
+          "expected": [
+            1,
+            2,
+            3
+          ],
+          "defectId": "page-01-d1"
+        },
+        {
+          "expression": "page([1],0,1)",
+          "expected": [
+            1
+          ],
+          "defectId": "page-01-d1"
+        }
+      ]
+    },
+    {
+      "id": "page-02",
+      "domain": "pagination",
+      "split": "evaluation",
+      "group": "page-02",
+      "kind": "single-defect",
+      "base": "export function offsetPage(items: string[], offset: number, size: number) {\n  return items.slice(offset, offset + size);\n}\n",
+      "head": "export function offsetPage(items: string[], offset: number, size: number) {\n  return items.slice(offset, size);\n}\n",
+      "labels": [
+        {
+          "id": "page-02-d1",
+          "expectedBehavior": "Size is a count, so end must include the offset.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "offsetPage([\"a\",\"b\",\"c\",\"d\"],2,2)",
+          "expected": [
+            "c",
+            "d"
+          ],
+          "defectId": "page-02-d1"
+        }
+      ]
+    },
+    {
+      "id": "page-03",
+      "domain": "pagination",
+      "split": "tuning",
+      "group": "page-03",
+      "kind": "single-defect",
+      "base": "export function lastPage(total: number, size: number) {\n  return Math.max(0, Math.ceil(total / size) - 1);\n}\n",
+      "head": "export function lastPage(total: number, size: number) {\n  return Math.max(0, Math.floor(total / size) - 1);\n}\n",
+      "labels": [
+        {
+          "id": "page-03-d1",
+          "expectedBehavior": "A partial final page must remain reachable.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "lastPage(5,2)",
+          "expected": 2,
+          "defectId": "page-03-d1"
+        }
+      ]
+    },
+    {
+      "id": "page-04",
+      "domain": "pagination",
+      "split": "evaluation",
+      "group": "page-04",
+      "kind": "single-defect",
+      "base": "export function hasMore(offset: number, count: number, total: number) {\n  return offset + count < total;\n}\n",
+      "head": "export function hasMore(offset: number, count: number, total: number) {\n  return offset + count <= total;\n}\n",
+      "labels": [
+        {
+          "id": "page-04-d1",
+          "expectedBehavior": "An exact final page must not advertise another page.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "hasMore(0,3,3)",
+          "expected": false,
+          "defectId": "page-04-d1"
+        }
+      ]
+    },
+    {
+      "id": "page-05",
+      "domain": "pagination",
+      "split": "evaluation",
+      "group": "page-05",
+      "kind": "multi-defect",
+      "base": "export function windowPage(items: number[], offset: number, size: number) {\n  const end = offset + size;\n  return items.slice(offset, end);\n}\nexport function nextOffset(offset: number, size: number) {\n  return offset + size;\n}\n",
+      "head": "export function windowPage(items: number[], offset: number, size: number) {\n  const end = offset + size - 1;\n  return items.slice(offset, end);\n}\nexport function nextOffset(offset: number, size: number) {\n  return size;\n}\n",
+      "labels": [
+        {
+          "id": "page-05-d1",
+          "expectedBehavior": "Preserve the last item of the page.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 3
+          },
+          "staticRules": [
+            "opticpr.slice-exclusive-boundary"
+          ],
+          "confirmingChecks": [
+            0
+          ]
+        },
+        {
+          "id": "page-05-d2",
+          "expectedBehavior": "Advance from the current offset.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 6,
+            "endLine": 6
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            1
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "windowPage([1,2,3],0,3)",
+          "expected": [
+            1,
+            2,
+            3
+          ],
+          "defectId": "page-05-d1"
+        },
+        {
+          "expression": "nextOffset(6,3)",
+          "expected": 9,
+          "defectId": "page-05-d2"
+        }
+      ]
+    },
+    {
+      "id": "page-06",
+      "domain": "pagination",
+      "split": "evaluation",
+      "group": "page-06",
+      "kind": "multi-defect",
+      "base": "export function cursorPage(items: number[], cursor: number, limit: number) {\n  const start = items.indexOf(cursor) + 1;\n  return items.slice(start, start + limit);\n}\nexport function totalPages(count: number, limit: number) {\n  return Math.ceil(count / limit);\n}\n",
+      "head": "export function cursorPage(items: number[], cursor: number, limit: number) {\n  const start = items.indexOf(cursor);\n  return items.slice(start, start + limit);\n}\nexport function totalPages(count: number, limit: number) {\n  return Math.floor(count / limit);\n}\n",
+      "labels": [
+        {
+          "id": "page-06-d1",
+          "expectedBehavior": "A cursor page starts after the cursor.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        },
+        {
+          "id": "page-06-d2",
+          "expectedBehavior": "Include partial pages in the count.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 6,
+            "endLine": 6
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            1
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "cursorPage([1,2,3],1,2)",
+          "expected": [
+            2,
+            3
+          ],
+          "defectId": "page-06-d1"
+        },
+        {
+          "expression": "totalPages(5,2)",
+          "expected": 3,
+          "defectId": "page-06-d2"
+        }
+      ]
+    },
+    {
+      "id": "page-07",
+      "domain": "pagination",
+      "split": "tuning",
+      "group": "page-07",
+      "kind": "clean",
+      "base": "export function cursorPage(items: number[], cursor: number, limit: number) {\n  const start = items.indexOf(cursor) + 1;\n  return items.slice(start, start + limit);\n}\nexport function totalPages(count: number, limit: number) {\n  return Math.ceil(count / limit);\n}\n",
+      "head": "export function cursorPage(items: number[], cursor: number, limit: number) {\n  const begin = items.indexOf(cursor) + 1;\n  return items.slice(begin, begin + limit);\n}\nexport function totalPages(count: number, limit: number) {\n  return Math.ceil(count / limit);\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "cursorPage([1,2,3],1,2)",
+          "expected": [
+            2,
+            3
+          ],
+          "defectId": null
+        },
+        {
+          "expression": "totalPages(5,2)",
+          "expected": 3,
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "page-08",
+      "domain": "pagination",
+      "split": "evaluation",
+      "group": "page-08",
+      "kind": "clean",
+      "base": "export function bounded(items: number[], offset: number, size: number) {\n  return items.slice(offset, Math.min(items.length, offset + size));\n}\n",
+      "head": "export function bounded(items: number[], offset: number, size: number) {\n  const end = Math.min(items.length, offset + size);\n  return items.slice(offset, end);\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "bounded([1,2,3],1,5)",
+          "expected": [
+            2,
+            3
+          ],
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "page-09",
+      "domain": "pagination",
+      "split": "evaluation",
+      "group": "page-09",
+      "kind": "clean",
+      "base": "export function inclusiveRange(items: number[], first: number, last: number) {\n  return items.slice(first, last + 1);\n}\n",
+      "head": "export function inclusiveRange(items: number[], first: number, last: number) {\n  const end = last + 1;\n  return items.slice(first, end);\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "inclusiveRange([1,2,3],0,2)",
+          "expected": [
+            1,
+            2,
+            3
+          ],
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "page-10",
+      "domain": "pagination",
+      "split": "tuning",
+      "group": "page-10",
+      "kind": "clean",
+      "base": "export function emptyPage(items: number[], size: number) {\n  return size > 0 ? items.slice(0, size) : [];\n}\n",
+      "head": "export function emptyPage(items: number[], size: number) {\n  if (size <= 0) return [];\n  return items.slice(0, size);\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "emptyPage([1,2],0)",
+          "expected": [],
+          "defectId": null
+        },
+        {
+          "expression": "emptyPage([1,2],1)",
+          "expected": [
+            1
+          ],
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "parse-01",
+      "domain": "parsing",
+      "split": "evaluation",
+      "group": "parse-01",
+      "kind": "single-defect",
+      "base": "export function decimal(value: string) {\n  return Number(value);\n}\n",
+      "head": "export function decimal(value: string) {\n  return parseInt(value, 10);\n}\n",
+      "labels": [
+        {
+          "id": "parse-01-d1",
+          "expectedBehavior": "Keep the fractional part of a decimal input.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "decimal(\"1.75\")",
+          "expected": 1.75,
+          "defectId": "parse-01-d1"
+        }
+      ]
+    },
+    {
+      "id": "parse-02",
+      "domain": "parsing",
+      "split": "tuning",
+      "group": "parse-02",
+      "kind": "single-defect",
+      "base": "export function enabled(value: string) {\n  return value === 'true';\n}\n",
+      "head": "export function enabled(value: string) {\n  return Boolean(value);\n}\n",
+      "labels": [
+        {
+          "id": "parse-02-d1",
+          "expectedBehavior": "The text false must parse as false.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "enabled(\"false\")",
+          "expected": false,
+          "defectId": "parse-02-d1"
+        }
+      ]
+    },
+    {
+      "id": "parse-03",
+      "domain": "parsing",
+      "split": "evaluation",
+      "group": "parse-03",
+      "kind": "single-defect",
+      "base": "export function fallback(value: string | undefined) {\n  const parsed = value === undefined ? undefined : Number(value);\n  return parsed ?? 10;\n}\n",
+      "head": "export function fallback(value: string | undefined) {\n  const parsed = value === undefined ? undefined : Number(value);\n  return parsed || 10;\n}\n",
+      "labels": [
+        {
+          "id": "parse-03-d1",
+          "expectedBehavior": "Zero is a valid value and must survive the fallback.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 3,
+            "endLine": 3
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "fallback(\"0\")",
+          "expected": 0,
+          "defectId": "parse-03-d1"
+        }
+      ]
+    },
+    {
+      "id": "parse-04",
+      "domain": "parsing",
+      "split": "tuning",
+      "group": "parse-04",
+      "kind": "single-defect",
+      "base": "export function payload(text: string) {\n  return JSON.parse(text);\n}\n",
+      "head": "export function payload(text: string) {\n  return JSON.parse(JSON.stringify(text));\n}\n",
+      "labels": [
+        {
+          "id": "parse-04-d1",
+          "expectedBehavior": "Parse the supplied JSON object rather than return its text.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "payload(\"{\\\"x\\\":1}\")",
+          "expected": {
+            "x": 1
+          },
+          "defectId": "parse-04-d1"
+        }
+      ]
+    },
+    {
+      "id": "parse-05",
+      "domain": "parsing",
+      "split": "evaluation",
+      "group": "parse-05",
+      "kind": "multi-defect",
+      "base": "export function pair(text: string) {\n  const index = text.indexOf('=');\n  return [text.slice(0, index), text.slice(index + 1)];\n}\nexport function percent(text: string) {\n  return Number(text) / 100;\n}\n",
+      "head": "export function pair(text: string) {\n  const index = text.indexOf('=');\n  return [text.slice(0, index), text.slice(index)];\n}\nexport function percent(text: string) {\n  return Number(text) * 100;\n}\n",
+      "labels": [
+        {
+          "id": "parse-05-d1",
+          "expectedBehavior": "Exclude the delimiter from the value.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 3,
+            "endLine": 3
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        },
+        {
+          "id": "parse-05-d2",
+          "expectedBehavior": "Convert a percentage into a fractional value.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 6,
+            "endLine": 6
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            1
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "pair(\"name=value\")",
+          "expected": [
+            "name",
+            "value"
+          ],
+          "defectId": "parse-05-d1"
+        },
+        {
+          "expression": "percent(\"25\")",
+          "expected": 0.25,
+          "defectId": "parse-05-d2"
+        }
+      ]
+    },
+    {
+      "id": "parse-06",
+      "domain": "parsing",
+      "split": "evaluation",
+      "group": "parse-06",
+      "kind": "multi-defect",
+      "base": "export function dateMonth(text: string) {\n  const [year, month, day] = text.split('-').map(Number);\n  return new Date(Date.UTC(year, month - 1, day)).toISOString();\n}\nexport function list(text: string) {\n  return text.split(',').map(value => value.trim()).filter(Boolean);\n}\n",
+      "head": "export function dateMonth(text: string) {\n  const [year, month, day] = text.split('-').map(Number);\n  return new Date(Date.UTC(year, month, day)).toISOString();\n}\nexport function list(text: string) {\n  return text.split(',').map(value => value.trim());\n}\n",
+      "labels": [
+        {
+          "id": "parse-06-d1",
+          "expectedBehavior": "Calendar input months are one based; UTC months are zero based.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 3,
+            "endLine": 3
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        },
+        {
+          "id": "parse-06-d2",
+          "expectedBehavior": "Ignore empty comma separated entries.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 6,
+            "endLine": 6
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            1
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "dateMonth(\"2024-01-01\")",
+          "expected": "2024-01-01T00:00:00.000Z",
+          "defectId": "parse-06-d1"
+        },
+        {
+          "expression": "list(\"a,, b\")",
+          "expected": [
+            "a",
+            "b"
+          ],
+          "defectId": "parse-06-d2"
+        }
+      ]
+    },
+    {
+      "id": "parse-07",
+      "domain": "parsing",
+      "split": "evaluation",
+      "group": "parse-07",
+      "kind": "clean",
+      "base": "export function integer(text: string) {\n  return parseInt(text, 10);\n}\n",
+      "head": "export function integer(text: string) {\n  const radix = 10;\n  return parseInt(text, radix);\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "integer(\"08\")",
+          "expected": 8,
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "parse-08",
+      "domain": "parsing",
+      "split": "tuning",
+      "group": "parse-08",
+      "kind": "clean",
+      "base": "export function trimValue(text: string) {\n  return text.trim();\n}\n",
+      "head": "export function trimValue(text: string) {\n  const value = text.trim();\n  return value;\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "trimValue(\" hi \")",
+          "expected": "hi",
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "parse-09",
+      "domain": "parsing",
+      "split": "evaluation",
+      "group": "parse-09",
+      "kind": "clean",
+      "base": "export function jsonValue(text: string) {\n  return JSON.parse(text);\n}\n",
+      "head": "export function jsonValue(text: string) {\n  const parsed = JSON.parse(text);\n  return parsed;\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "jsonValue(\"{\\\"ok\\\":true}\")",
+          "expected": {
+            "ok": true
+          },
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "parse-10",
+      "domain": "parsing",
+      "split": "evaluation",
+      "group": "parse-10",
+      "kind": "clean",
+      "base": "export function zeroDefault(text?: string) {\n  return text === undefined ? 0 : Number(text);\n}\n",
+      "head": "export function zeroDefault(text?: string) {\n  if (text === undefined) return 0;\n  return Number(text);\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "zeroDefault()",
+          "expected": 0,
+          "defectId": null
+        },
+        {
+          "expression": "zeroDefault(\"2.5\")",
+          "expected": 2.5,
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "state-01",
+      "domain": "state updates",
+      "split": "tuning",
+      "group": "state-01",
+      "kind": "single-defect",
+      "base": "export function increment(state: {count: number}) {\n  return {...state, count: state.count + 1};\n}\n",
+      "head": "export function increment(state: {count: number}) {\n  return {count: state.count + 1, ...state};\n}\n",
+      "labels": [
+        {
+          "id": "state-01-d1",
+          "expectedBehavior": "Apply the increment after copying the previous state.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "increment({count:2})",
+          "expected": {
+            "count": 3
+          },
+          "defectId": "state-01-d1"
+        }
+      ]
+    },
+    {
+      "id": "state-02",
+      "domain": "state updates",
+      "split": "evaluation",
+      "group": "state-02",
+      "kind": "single-defect",
+      "base": "export function remove(items: number[], value: number) {\n  return items.filter(item => item !== value);\n}\n",
+      "head": "export function remove(items: number[], value: number) {\n  return items.filter(item => item === value);\n}\n",
+      "labels": [
+        {
+          "id": "state-02-d1",
+          "expectedBehavior": "Remove only the requested item.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "remove([1,2,3],2)",
+          "expected": [
+            1,
+            3
+          ],
+          "defectId": "state-02-d1"
+        }
+      ]
+    },
+    {
+      "id": "state-03",
+      "domain": "state updates",
+      "split": "evaluation",
+      "group": "state-03",
+      "kind": "single-defect",
+      "base": "export function append(items: number[], value: number) {\n  return [...items, value];\n}\n",
+      "head": "export function append(items: number[], value: number) {\n  items.push(value);\n  return items;\n}\n",
+      "labels": [
+        {
+          "id": "state-03-d1",
+          "expectedBehavior": "An immutable state update must preserve the input array.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "(() => { const before=[1]; append(before,2); return before; })()",
+          "expected": [
+            1
+          ],
+          "defectId": "state-03-d1"
+        }
+      ]
+    },
+    {
+      "id": "state-04",
+      "domain": "state updates",
+      "split": "evaluation",
+      "group": "state-04",
+      "kind": "single-defect",
+      "base": "export function toggle(state: {on: boolean}) {\n  return {...state, on: !state.on};\n}\n",
+      "head": "export function toggle(state: {on: boolean}) {\n  return {...state, on: true};\n}\n",
+      "labels": [
+        {
+          "id": "state-04-d1",
+          "expectedBehavior": "Toggling an enabled state must disable it.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "toggle({on:true})",
+          "expected": {
+            "on": false
+          },
+          "defectId": "state-04-d1"
+        }
+      ]
+    },
+    {
+      "id": "state-05",
+      "domain": "state updates",
+      "split": "evaluation",
+      "group": "state-05",
+      "kind": "multi-defect",
+      "base": "export function rename(state: {user: {name: string}}, name: string) {\n  return {...state, user: {...state.user, name}};\n}\nexport function debit(balance: number, amount: number) {\n  return balance - amount;\n}\n",
+      "head": "export function rename(state: {user: {name: string}}, name: string) {\n  state.user.name = name;\n  return {...state};\n}\nexport function debit(balance: number, amount: number) {\n  return balance + amount;\n}\n",
+      "labels": [
+        {
+          "id": "state-05-d1",
+          "expectedBehavior": "A rename must preserve the previous nested state.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        },
+        {
+          "id": "state-05-d2",
+          "expectedBehavior": "A debit subtracts the amount.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 6,
+            "endLine": 6
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            1
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "(() => { const before={user:{name:\"A\"}}; rename(before,\"B\"); return before; })()",
+          "expected": {
+            "user": {
+              "name": "A"
+            }
+          },
+          "defectId": "state-05-d1"
+        },
+        {
+          "expression": "debit(10,3)",
+          "expected": 7,
+          "defectId": "state-05-d2"
+        }
+      ]
+    },
+    {
+      "id": "state-06",
+      "domain": "state updates",
+      "split": "tuning",
+      "group": "state-06",
+      "kind": "multi-defect",
+      "base": "export function replace(items: {id: number, value: string}[], id: number, value: string) {\n  return items.map(item => item.id === id ? {...item, value} : item);\n}\nexport function activeCount(items: {active: boolean}[]) {\n  return items.filter(item => item.active).length;\n}\n",
+      "head": "export function replace(items: {id: number, value: string}[], id: number, value: string) {\n  return items.map(item => item.id !== id ? {...item, value} : item);\n}\nexport function activeCount(items: {active: boolean}[]) {\n  return items.filter(item => !item.active).length;\n}\n",
+      "labels": [
+        {
+          "id": "state-06-d1",
+          "expectedBehavior": "Replace the matching ID only.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 2,
+            "endLine": 2
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            0
+          ]
+        },
+        {
+          "id": "state-06-d2",
+          "expectedBehavior": "Count active entries.",
+          "evidence": {
+            "path": "src/change.ts",
+            "startLine": 5,
+            "endLine": 5
+          },
+          "staticRules": [],
+          "confirmingChecks": [
+            1
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "expression": "replace([{id:1,value:\"a\"},{id:2,value:\"b\"}],1,\"z\")",
+          "expected": [
+            {
+              "id": 1,
+              "value": "z"
+            },
+            {
+              "id": 2,
+              "value": "b"
+            }
+          ],
+          "defectId": "state-06-d1"
+        },
+        {
+          "expression": "activeCount([{active:true},{active:true},{active:false}])",
+          "expected": 2,
+          "defectId": "state-06-d2"
+        }
+      ]
+    },
+    {
+      "id": "state-07",
+      "domain": "state updates",
+      "split": "evaluation",
+      "group": "state-07",
+      "kind": "clean",
+      "base": "export function setCount(state: {count: number}, count: number) {\n  return {...state, count};\n}\n",
+      "head": "export function setCount(state: {count: number}, count: number) {\n  return Object.assign({}, state, {count});\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "setCount({count:2},4)",
+          "expected": {
+            "count": 4
+          },
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "state-08",
+      "domain": "state updates",
+      "split": "evaluation",
+      "group": "state-08",
+      "kind": "clean",
+      "base": "export function sortCopy(items: number[]) {\n  return [...items].sort((a,b) => a-b);\n}\n",
+      "head": "export function sortCopy(items: number[]) {\n  return items.slice().sort((a,b) => a-b);\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "sortCopy([3,1,2])",
+          "expected": [
+            1,
+            2,
+            3
+          ],
+          "defectId": null
+        },
+        {
+          "expression": "(() => { const a=[3,1,2]; sortCopy(a); return a; })()",
+          "expected": [
+            3,
+            1,
+            2
+          ],
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "state-09",
+      "domain": "state updates",
+      "split": "tuning",
+      "group": "state-09",
+      "kind": "clean",
+      "base": "export function merge(a: {x: number}, b: {x: number}) {\n  return {...a, ...b};\n}\n",
+      "head": "export function merge(a: {x: number}, b: {x: number}) {\n  return Object.assign({}, a, b);\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "merge({x:1},{x:2})",
+          "expected": {
+            "x": 2
+          },
+          "defectId": null
+        }
+      ]
+    },
+    {
+      "id": "state-10",
+      "domain": "state updates",
+      "split": "evaluation",
+      "group": "state-10",
+      "kind": "clean",
+      "base": "export function deleteKey(state: Record<string, number>, key: string) {\n  const next = {...state};\n  delete next[key];\n  return next;\n}\n",
+      "head": "export function deleteKey(state: Record<string, number>, key: string) {\n  const next = Object.assign({}, state);\n  delete next[key];\n  return next;\n}\n",
+      "labels": [],
+      "checks": [
+        {
+          "expression": "deleteKey({a:1,b:2},\"a\")",
+          "expected": {
+            "b": 2
+          },
+          "defectId": null
+        },
+        {
+          "expression": "(() => { const s={a:1}; deleteKey(s,\"a\"); return s; })()",
+          "expected": {
+            "a": 1
+          },
+          "defectId": null
+        }
+      ]
+    }
+  ]
+}

@@ -24,7 +24,7 @@ try {
   const input = await adapter.revisions();
   const changes = await adapter.changedFiles(input.baseSha, input.headSha);
   for (const contextTokens of [4096, 8192] as const) for (const contextMode of ['diff-only', 'function-context'] as const) {
-    const configuration: LocalConfig = { ...githubConfig, adapter: 'pagination-bundle-v1', contextTokens, contextMode };
+    const configuration: LocalConfig = { ...githubConfig, modelEnabled: true, adapter: 'pagination-bundle-v1', contextTokens, contextMode };
     const identity = runIdentity(input, configuration);
     const run = await db.reviewRun.upsert({ where: { logicalKey: identity.logicalKey },
       create: { ...input, ...identity, configuration, state: 'running' }, update: { state: 'running', error: null } });

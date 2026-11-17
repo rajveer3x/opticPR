@@ -1,11 +1,25 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import { readFile, readdir } from 'node:fs/promises';
+import { PrismaClient } from '../packages/database/dist/index.js';
+import { createQueue } from '../packages/runtime/dist/index.js';
 import { fixtureConfig, reportSchema } from '../packages/contracts/dist/index.js';
 import { FixtureRepositoryAdapter } from '../packages/repository/dist/index.js';
 
 const exec = promisify(execFile);
-const env = { ...process.env, FIXTURE_INSPECTION_ENABLED: '1', PORT: process.env.SMOKE_PORT ?? '31997', HOST: '127.0.0.1' };
+const namespace = `smoke_${randomUUID().replaceAll('-', '')}`;
+const databaseUrl = new URL(process.env.DATABASE_URL); databaseUrl.searchParams.set('schema', namespace);
+const admin = new PrismaClient(), db = new PrismaClient({ datasourceUrl: databaseUrl.toString() });
+await admin.$executeRawUnsafe(`CREATE SCHEMA "${namespace}"`);
+const directory = new URL('../packages/database/prisma/migrations/', import.meta.url);
+for (const name of (await readdir(directory)).filter(name => /^\d/.test(name)).sort()) {
+  for (const statement of (await readFile(new URL(`${name}/migration.sql`, directory), 'utf8')).split(';').map(s => s.trim()).filter(Boolean)) await db.$executeRawUnsafe(statement);
+}
+const queue = createQueue(namespace);
+const env = { ...process.env, DATABASE_URL: databaseUrl.toString(), REVIEW_QUEUE: namespace,
+  DASHBOARD_ORIGIN: '', GITHUB_APP_ID: '', GITHUB_APP_PRIVATE_KEY: '', GITHUB_WEBHOOK_SECRET: '', FIXTURE_INSPECTION_ENABLED: '1', PORT: process.env.SMOKE_PORT ?? '31997', HOST: '127.0.0.1' };
 const origin = `http://127.0.0.1:${env.PORT}`;
 const children = [];
 function start(entry) {
@@ -46,6 +60,7 @@ try {
   assert.equal(report.findings.length, 1);
   assert.equal(report.findings[0].source, 'fixture');
   console.log(`Verified CLI replay and stored HTTP report: ${first.runId}`);
+  await admin.$disconnect(); await db.$disconnect();
   await exec('docker', ['compose', 'stop', 'postgres'], { timeout: 30000 });
   postgresStopped = true;
   const outage = await exec(process.execPath, ['--env-file=.env', 'scripts/check-outage.mjs'], { env, timeout: 20000 });
@@ -59,4 +74,6 @@ try {
   })));
   await adapter?.close();
   if (postgresStopped) await exec('docker', ['compose', 'start', '--wait', 'postgres'], { timeout: 60000 });
+  await queue.obliterate({ force: true }); await queue.close(); await db.$disconnect();
+  await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${namespace}" CASCADE`); await admin.$disconnect();
 }

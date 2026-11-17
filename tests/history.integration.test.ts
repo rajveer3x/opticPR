@@ -16,7 +16,7 @@ import { scanSemgrep } from '../apps/worker/src/semgrep.js';
 const namespace = `history_test_${randomUUID().replaceAll('-', '')}`;
 const url = new URL(process.env.DATABASE_URL!); url.searchParams.set('schema', namespace);
 const admin = new PrismaClient(), db = new PrismaClient({ datasourceUrl: url.toString() });
-const configuration = { ...githubConfig, adapter: 'pagination-bundle-v1' as const };
+const configuration = { ...githubConfig, modelEnabled: true, adapter: 'pagination-bundle-v1' as const };
 let queue: ReturnType<typeof createQueue>, worker: Worker, server: Server, origin: string;
 let timeline: { baseSha: string; scenarios: Record<string, string> };
 let scanMode: 'real' | 'skip' = 'real';

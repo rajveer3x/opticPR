@@ -20,7 +20,7 @@ try {
     await adapter.close(); adapter = await FixtureRepositoryAdapter.open(input);
   }
   queue = createQueue();
-  const run = await scheduleRun(db, queue, input, scenario ? { ...githubConfig, adapter: 'pagination-bundle-v1' } : fixtureConfig);
+  const run = await scheduleRun(db, queue, input, scenario ? { ...githubConfig, modelEnabled: process.env.MODEL_ENRICHMENT_ENABLED === '1', adapter: 'pagination-bundle-v1' } : fixtureConfig);
   const completed = await waitForReport(db, run.id, timeout);
   const report = reportSchema.parse(completed.report);
   console.log(JSON.stringify({ runId: completed.id, logicalKey: completed.logicalKey, state: completed.state, baseSha: report.input.baseSha, headSha: report.input.headSha }, null, 2));

@@ -1,4 +1,4 @@
-name: Fixture, GitHub intake and publication
+name: Review, evaluation and recovery
 on: [push, pull_request]
 jobs:
   fixture:
@@ -26,6 +26,7 @@ jobs:
       - run: pnpm test:integration
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:browser
+      - run: pnpm ops:recovery
       - run: pnpm test:smoke
       - if: failure()
         run: docker compose logs --no-color

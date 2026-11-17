@@ -20,13 +20,25 @@ export interface RepositoryAdapter {
 export class FixtureRepositoryAdapter implements RepositoryAdapter {
   private constructor(private readonly directory: string, private readonly input: ReviewInput) {}
 
+  static async openEvaluation(revisions: ReviewInput): Promise<FixtureRepositoryAdapter> {
+    const directory = fileURLToPath(new URL('../../../fixtures/evaluation/', import.meta.url));
+    const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8')) as Record<string, ReviewInput>;
+    const input = inputSchema.parse(revisions);
+    if (!Object.values(manifest).some(candidate => JSON.stringify(inputSchema.parse(candidate)) === JSON.stringify(input))) throw new Error('Unknown sealed evaluation comparison');
+    return this.openBundle(directory, input);
+  }
+
   static async open(revisions?: ReviewInput): Promise<FixtureRepositoryAdapter> {
     const manifest = inputSchema.parse(JSON.parse(await readFile(join(fixtureDirectory, 'manifest.json'), 'utf8')));
     const input = revisions ? inputSchema.parse(revisions) : manifest;
     if (input.source !== 'fixture' || input.repositoryId !== manifest.repositoryId) throw new Error('Invalid fixture repository scope');
+    return this.openBundle(fixtureDirectory, input);
+  }
+
+  private static async openBundle(bundleDirectory: string, input: ReviewInput): Promise<FixtureRepositoryAdapter> {
     const directory = await mkdtemp(join(tmpdir(), 'opticpr-fixture-'));
     try {
-      await exec('git', ['clone', '--bare', '--quiet', join(fixtureDirectory, 'repository.bundle'), directory], { timeout: 5000 });
+      await exec('git', ['clone', '--bare', '--quiet', join(bundleDirectory, 'repository.bundle'), directory], { timeout: 5000 });
       const adapter = new FixtureRepositoryAdapter(directory, input);
       await adapter.revisions();
       return adapter;

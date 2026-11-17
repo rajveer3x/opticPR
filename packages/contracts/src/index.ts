@@ -14,11 +14,12 @@ const intakeConfigSchema = z.object({
   analyzerVersion: z.literal('1'), ruleRevision: z.literal('none'),
 });
 export const localConfigSchema = z.object({
-  adapter: z.enum(['github-rest-v1', 'pagination-bundle-v1']), analyzer: z.literal('local-analysis'),
+  adapter: z.enum(['github-rest-v1', 'pagination-bundle-v1', 'evaluation-bundle-v1']), analyzer: z.literal('local-analysis'),
   analyzerVersion: z.literal('1'), ruleRevision: z.literal('local-js-ts-v1'),
   semgrepVersion: z.literal('1.144.0'), grammarRevision: z.literal('js-0.23.1-ts-0.23.2-wasm-0.25.10'),
   promptRevision: z.literal('review-v1'), model: z.literal('qwen2.5-coder:7b'),
   modelRevision: z.literal('sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364'),
+  modelEnabled: z.boolean().optional(),
   contextTokens: z.union([z.literal(4096), z.literal(8192)]), contextMode: z.enum(['diff-only', 'function-context']),
   maxFiles: z.literal(20), maxChangedLines: z.literal(800), modelDeadlineMs: z.literal(90000),
 });
@@ -28,7 +29,7 @@ export const githubConfig = localConfigSchema.parse({
   adapter: 'github-rest-v1', analyzer: 'local-analysis', analyzerVersion: '1', ruleRevision: 'local-js-ts-v1',
   semgrepVersion: '1.144.0', grammarRevision: 'js-0.23.1-ts-0.23.2-wasm-0.25.10', promptRevision: 'review-v1',
   model: 'qwen2.5-coder:7b', modelRevision: 'sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364',
-  contextTokens: 4096, contextMode: 'function-context', maxFiles: 20, maxChangedLines: 800, modelDeadlineMs: 90000,
+  modelEnabled: false, contextTokens: 4096, contextMode: 'function-context', maxFiles: 20, maxChangedLines: 800, modelDeadlineMs: 90000,
 });
 export type LocalConfig = z.infer<typeof localConfigSchema>;
 export const fixtureConfig = fixtureConfigSchema.parse({

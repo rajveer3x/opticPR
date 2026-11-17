@@ -6,3 +6,9 @@ coverage/
 .DS_Store
 test-results/
 playwright-report/
+
+backups/
+*.dump
+.env.release
+tmp/
+output/

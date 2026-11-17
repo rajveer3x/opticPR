@@ -125,6 +125,14 @@ export async function analyzeLocal(
     });
   }
 
+  if (configuration.modelEnabled !== true) {
+    report.enrichment = { status: 'skipped', accepted: 0, rejected: 0, detail: 'Model enrichment is opt-in pending held-out quality evidence.' };
+    report.stages = report.stages.filter(stage => stage.name !== 'model');
+    report.stages.push({ name: 'model', status: 'skipped', source: input.source, version: configuration.modelRevision, detail: report.enrichment.detail });
+    report.coverage.detail = 'Coverage is limited to pinned JS/TS static rules. Optional model enrichment is disabled.';
+    return reportSchema.parse(report);
+  }
+
   const contexts: SourceContext[] = [];
   // Budget in UTF-8 bytes is conservative for tokenization and also bounds code with
   // very long single lines. Reserve space for instructions, JSON schema and output.

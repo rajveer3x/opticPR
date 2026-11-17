@@ -1,0 +1,69 @@
+{
+  "createdAt": "2026-11-17T18:59:43.715929+00:00",
+  "gitHeadAtPackaging": "0c37d1eb7b307eb3058c43e302535a768df78bc5",
+  "workingTreeChangesIncluded": true,
+  "files": {
+    "fixtures/evaluation/cases.json": {
+      "bytes": 30937,
+      "sha256": "1afd41de8af570f20065f61dea810de0885c44871a06977011b712206c00652a"
+    },
+    "fixtures/evaluation/manifest.json": {
+      "bytes": 7094,
+      "sha256": "8876722286862a98a0b031508c9db2363c5a7bbf0e971c457668719c53a3b776"
+    },
+    "fixtures/evaluation/repository.bundle": {
+      "bytes": 19487,
+      "sha256": "a0b1dd54c665c57f353f6a04c123c653563db1c8de5bab1b6b5fe721843942de"
+    },
+    "fixtures/evaluation/seal.json": {
+      "bytes": 874,
+      "sha256": "c9f20f76d70641ed2674f24a5685445e5f2310d4b0e02c9739a281e776bcbe95"
+    },
+    "context/evaluation/08-results.md": {
+      "bytes": 8550,
+      "sha256": "fbb21e4870049c86d443bf28b1bba42e0a654e04ee2d59c5b52f6d4daca93e0e"
+    },
+    "context/evaluation/08-held-out/raw.json": {
+      "bytes": 298788,
+      "sha256": "1fa6b1ec7d1c9245dbf539a0abe03d0925e97fa4bba1c3a8f8d1f4e69e3808db"
+    },
+    "context/evaluation/08-held-out/score.json": {
+      "bytes": 28282,
+      "sha256": "b84a83293fb01816308b84f9ddbe31f1726ea9921ac65b0a06aa08a55b8d902c"
+    },
+    "context/evaluation/08-contended/raw.json": {
+      "bytes": 299095,
+      "sha256": "0f83c144d8c76bf542f059243a5e9990533293219aa002bc5b82b23c1f3d3a6b"
+    },
+    "context/evaluation/08-contended/score.json": {
+      "bytes": 28282,
+      "sha256": "bb95d3a08d1100a85d311a8aa54b831936b4a71818a4d3f43f7a4e0d120cb9b3"
+    },
+    "context/releases/08-recovery.json": {
+      "bytes": 3437,
+      "sha256": "5105e76e411d3bf52da7646641244440be41b51e09748b13e877efd72b770d22"
+    },
+    "context/releases/08-demo.webm": {
+      "bytes": 12688575,
+      "sha256": "74d2e4349df236b869c6f3b9eec40bc858f4d526b397c0bb42e426591a0a5bab"
+    },
+    "context/releases/08-demo-transcript.md": {
+      "bytes": 1371,
+      "sha256": "3d8f0116f7e892dd81a58d424cb40bffceccfa06dde3f17a9efb21823180a056"
+    },
+    "context/releases/08-deployment.json": {
+      "bytes": 3283,
+      "sha256": "9ce02bece5b3423af8805dd8326a8882f8f8b0e8df303159047af929f4bf380b"
+    },
+    "context/releases/08-deployment-initial.json": {
+      "bytes": 3199,
+      "sha256": "a112006c8f49f6e182e0d449677d74d31fd9b81ca725a16876031c66f99e935c"
+    },
+    "context/releases/08-runbook.md": {
+      "bytes": 10905,
+      "sha256": "f7df5a8e09064c2a73f2a34b42bb11dba116ced0a58a730345dcf55f4e6fbbc5"
+    }
+  },
+  "updatedAt": "2026-11-17T19:14:40.525774+00:00",
+  "operatingScope": "Local-only CV project; public preview and tunnels retired at user request"
+}

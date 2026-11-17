@@ -42,14 +42,15 @@ export async function observeLiveTarget(tx: Tx, scope: GitHubScope, number: numb
     return null;
   }
   const input = inputSchema.parse({ source: 'github', repositoryId: scope.repositoryId, pullRequestNumber: number, baseSha: live.baseSha, headSha: live.headSha });
-  const identity = runIdentity(input, githubConfig);
+  const configuration = { ...githubConfig, modelEnabled: process.env.MODEL_ENRICHMENT_ENABLED === '1' };
+  const identity = runIdentity(input, configuration);
   const previous = await tx.pullRequest.findUnique({ where });
   // Preserve a maintainer-requested attempt while this exact comparison is current.
   const desired = previous ? await tx.reviewRun.findUnique({ where: { logicalKey: previous.desiredRunKey } }) : null;
   const selected = desired && desired.baseSha === input.baseSha && desired.headSha === input.headSha &&
     desired.configurationDigest === identity.configurationDigest ? desired : null;
   let run = selected ?? await tx.reviewRun.upsert({ where: { logicalKey: identity.logicalKey },
-    create: { ...input, ...identity, configuration: githubConfig, installationId: scope.installationId, grantVersion: scope.grantVersion }, update: {},
+    create: { ...input, ...identity, configuration, installationId: scope.installationId, grantVersion: scope.grantVersion }, update: {},
   });
   if (run.state === 'cancelled' || run.grantVersion !== scope.grantVersion) {
     run = await tx.reviewRun.update({ where: { id: run.id }, data: {
