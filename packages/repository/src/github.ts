@@ -13,10 +13,16 @@ export interface GitHubRepositoryClient {
 }
 export type GitHubClientFactory = (scope: GitHubScope, assertAccess: () => Promise<void>) => GitHubRepositoryClient;
 export interface SummaryComment { id: string; body: string; appOwned: boolean }
+export interface ReviewAnchor { path: string; line: number; side: 'RIGHT'; body: string }
+export interface ReviewComment extends SummaryComment {
+  reviewId: string; path: string; originalCommitId: string; originalLine: number | null; side: string; reply: boolean;
+}
 export interface GitHubPublicationClient extends GitHubRepositoryClient {
   comments(number: number): Promise<SummaryComment[]>;
   createComment(number: number, body: string): Promise<string>;
   updateComment(id: string, body: string): Promise<void>;
+  reviewComments(number: number): Promise<ReviewComment[]>;
+  createReview(number: number, headSha: string, comment: ReviewAnchor): Promise<string>;
 }
 export type GitHubPublicationClientFactory = (scope: GitHubScope, assertAccess: () => Promise<void>) => GitHubPublicationClient;
 
@@ -41,6 +47,16 @@ export function githubClientFactory(credentials: { appId: string; privateKey: st
       return new Octokit({ auth: token, request, log });
     }
     const target = { owner: scope.owner, repo: scope.name };
+    let botLogin: string | undefined;
+    async function appBotLogin() {
+      if (!botLogin) {
+        const { token } = await authenticate({ type: 'app' });
+        const { data } = await new Octokit({ auth: token, request, log }).rest.apps.getAuthenticated();
+        if (!data?.slug) throw new Error('GitHub App identity unavailable');
+        botLogin = `${data.slug}[bot]`;
+      }
+      return botLogin;
+    }
     return {
       async pullRequest(number) {
         await assertAccess();
@@ -80,6 +96,26 @@ export function githubClientFactory(credentials: { appId: string; privateKey: st
         if (!publication) throw new Error('Publication credentials required');
         if (!/^[1-9][0-9]*$/.test(id) || !Number.isSafeInteger(Number(id))) throw new Error('Invalid comment ID');
         await (await session()).rest.issues.updateComment({ ...target, comment_id: Number(id), body });
+      },
+      async reviewComments(number) {
+        if (!publication) throw new Error('Publication credentials required');
+        // Review comments omit performed_via_github_app. Resolve our authenticated
+        // App's reserved bot login; marker text alone never establishes ownership.
+        const login = await appBotLogin();
+        const octokit = await session();
+        const comments = await octokit.paginate(octokit.rest.pulls.listReviewComments, { ...target, pull_number: number, per_page: 100 });
+        return comments.map(comment => ({ id: String(comment.id), body: comment.body, reviewId: String(comment.pull_request_review_id),
+          appOwned: comment.user?.type === 'Bot' && comment.user.login === login,
+          path: comment.path, originalCommitId: comment.original_commit_id, originalLine: comment.original_line ?? comment.line ?? null,
+          side: comment.side ?? '', reply: comment.in_reply_to_id !== undefined }));
+      },
+      async createReview(number, headSha, comment) {
+        if (!publication) throw new Error('Publication credentials required');
+        shaSchema.parse(headSha); validatePath(comment.path);
+        if (!Number.isSafeInteger(comment.line) || comment.line < 1 || comment.side !== 'RIGHT') throw new Error('Invalid review anchor');
+        const { data } = await (await session()).rest.pulls.createReview({ ...target, pull_number: number,
+          commit_id: headSha, event: 'COMMENT', body: comment.body.split('\n')[0], comments: [comment] });
+        return String(data.id);
       },
     };
   };

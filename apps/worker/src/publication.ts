@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from '@opticpr/database';
 import { githubPublicationClientsFromEnv, type GitHubPublicationClientFactory } from '@opticpr/repository';
 import { AccessRevokedError, logger, repositoryScope } from '@opticpr/runtime';
 import { lockPullRequest, observeLiveTarget, publicationIntent, publicationKey, pullKey, reviewTransactionOptions } from './current-review.js';
+import { publishInlineComments } from './inline-comments.js';
 
 export function summaryMarker(repositoryId: string, number: number) {
   return `<!-- opticpr:summary:${repositoryId}:${number} -->`;
@@ -17,7 +18,7 @@ export function summaryBody(repositoryId: string, number: number, baseSha: strin
       `Analyzed ${report.coverage.analyzedFiles.length} files; ${report.coverage.changedFiles.length} changed files in the comparison.`, '');
     if (report.coverage.status !== 'complete') lines.push('Analysis is incomplete. An empty finding list does not indicate a clean review.', '');
     lines.push(`Findings: ${report.findings.length}.`, ...(report.enrichment ? [`Model enrichment: ${report.enrichment.status}; rejected candidates: ${report.enrichment.rejected}.`] : []));
-    for (const finding of report.findings.slice(0, 20)) lines.push(`- ${escapeText(finding.title)} (${finding.severity}) — ${escapeText(finding.evidence.path)}:${finding.evidence.startLine}\n  ${escapeText(finding.impact)}\n  Verify: ${escapeText(finding.verification)}\n  Excerpt: ${escapeText(finding.evidence.excerpt)}`);
+    for (const finding of report.findings) lines.push(`- ${escapeText(finding.title)} (${finding.severity}) — ${escapeText(finding.evidence.path)}:${finding.evidence.startLine}\n  ${escapeText(finding.impact)}\n  Verify: ${escapeText(finding.verification)}\n  Excerpt: ${escapeText(finding.evidence.excerpt)}`);
     if (report.history) {
       lines.push('', 'Finding history:');
       for (const entry of report.history.findings.slice(0, 30)) {
@@ -96,6 +97,14 @@ export function createPublisher(db: PrismaClient, clients: GitHubPublicationClie
                 if (commentId) await client.updateComment(commentId, body);
                 else commentId = await client.createComment(entry.pullRequestNumber, body);
                 await tx.pullRequest.update({ where: pullKey(entry.repositoryId, entry.pullRequestNumber), data: { commentId, publishedRunId: ready ? target.run.id : null } });
+                if (report) {
+                  const unchanged = await publishInlineComments(tx, report, client, async () => {
+                    const live = await observeLiveTarget(tx, scope, entry.pullRequestNumber, client);
+                    return !!live && live.pr.eligible && live.pr.latestRunId === report.runId && live.pr.desiredRunKey === report.logicalKey &&
+                      live.pr.baseSha === report.input.baseSha && live.pr.headSha === report.input.headSha;
+                  });
+                  if (!unchanged) continue;
+                }
                 const after = await observeLiveTarget(tx, scope, entry.pullRequestNumber, client);
                 if (!after) return;
                 if (after.pr.desiredRunKey === target.run.logicalKey && after.pr.baseSha === target.run.baseSha && after.pr.headSha === target.run.headSha) {

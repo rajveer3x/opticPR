@@ -31,6 +31,7 @@ model ReviewRun {
   enrichments         RunEnrichment[]
   publications        ReviewPublication[]
   findingSnapshot     FindingSnapshot?
+  inlinePublications  InlinePublication[]
   @@index([source, state])
 }
 
@@ -150,8 +151,28 @@ model Finding {
   repositoryId String
   pullRequestNumber Int
   decisions FindingDecision[]
+  inlinePublications InlinePublication[]
   createdAt DateTime @default(now())
   @@index([source, repositoryId, pullRequestNumber])
+}
+
+// Revision-scoped evidence and recovery identity survive replacement of the PR outbox.
+model InlinePublication {
+  runId String @db.Uuid
+  run ReviewRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  findingId String @db.Uuid
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  marker String @unique
+  path String
+  line Int?
+  body String
+  state String @default("pending")
+  reason String?
+  reviewId String?
+  commentId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@id([runId, findingId])
 }
 
 // Append-only reviewer audit; id is also the operator's idempotency key.

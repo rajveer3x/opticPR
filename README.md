@@ -147,7 +147,18 @@ pnpm publication:retry <github-repository-id> <pr-number>
 ```
 
 The running worker publishes it on the next poll. This local operator command rechecks installation/repository access; an authenticated maintainer retry endpoint belongs to feature 07. Re-observing the same revision through another webhook does not reset an exhausted retry budget. Rebuild after pulling code changes and apply migrations with `pnpm db:migrate` before starting services.
-# opticPR
+
+## Verified inline comments
+
+Apply `pnpm db:migrate` and rebuild before restarting the worker. Newly completed current GitHub reviews commit one `InlinePublication` intent per finding together with the frozen report, history snapshot, current pointer and summary intent. Each intent stores its revision-scoped recovery marker, destination path, head source line and body. Confirmed GitHub review/comment IDs are retained separately from the replaceable PR publication outbox.
+
+The publisher parses unified hunk headers and counts both sides, including deleted lines and later hunks. It accepts only added head lines whose text matches the finding; renamed files use their destination path. Before posting, it fetches the exact comparison and SHA-addressed source again and verifies the full evidence excerpt. Missing, truncated or rejected anchors stay in the report and summary. Unconfirmed or snapshot-dismissed findings do not create new threads.
+
+Inline comments use GitHub's [create review endpoint](https://docs.github.com/en/rest/pulls/reviews#create-a-review-for-a-pull-request) with `event: COMMENT`, an explicit reviewed `commit_id`, and `path`, source `line` and `side: RIGHT`. Each finding gets its own submitted review so a rejected anchor cannot prevent another eligible finding from publishing. These are single-line anchors even when the evidence excerpt spans multiple lines. The same installation/PR locks, access checks, live base/head checks and current-pointer guard used by the summary apply immediately before each review write. A push during a request leaves that thread bound to the reviewed commit and reconciles the persistent summary to the new pending comparison.
+
+Recovery paginates [review comments](https://docs.github.com/en/rest/pulls/comments#list-review-comments-on-a-pull-request) and requires the marker, original commit, path, original line and right side to match. Because this endpoint omits `performed_via_github_app`, ownership is verified against the authenticated App's reserved bot login, resolved through `GET /app` using App authentication. User copies, other apps, replies and other revisions cannot claim an intent. A successful create whose response times out is recovered before another create. If a review ID was returned but its comment is not yet visible, retries wait for confirmation. Prior revisions' reports and threads remain intact; a finding on another reviewed comparison has a separate publication identity.
+
+`InlinePublication.state` is `pending`, `published`, `skipped` (with a reason), or `superseded` when the desired comparison moves before posting. Transient failures use the PR publication attempt budget and backoff. Use the existing `pnpm publication:retry <github-repository-id> <pr-number>` command after recovery. Inspect per-run intents through Prisma/operator tooling; authenticated dashboard access remains feature 07. The tests use real PostgreSQL/Redis and mocked GitHub; no live GitHub review is posted by the acceptance suite.
 
 ## Local analysis and function context
 

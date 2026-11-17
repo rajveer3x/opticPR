@@ -1,6 +1,6 @@
 # Implementation plan
 
-**Current state:** features 01–05 are implemented. Local acceptance checks use real PostgreSQL/Redis, pinned Semgrep and mocked GitHub; feature 04 benchmark results are recorded in `context/benchmarks/`. A clean CI workflow is included; hosted CI has not been run in this session. Features 06–08 remain pending. The eight-week schedule is an estimate. Each feature spec defines the evidence for completing that slice.
+**Current state:** features 01–06 are implemented. Local acceptance checks use real PostgreSQL/Redis, pinned Semgrep and mocked GitHub; feature 04 benchmark results are recorded in `context/benchmarks/`. A clean CI workflow is included; hosted CI has not been run in this session. Features 07–08 remain pending. The eight-week schedule is an estimate. Each feature spec defines the evidence for completing that slice.
 
 | Order | Milestone | Dependency | Exit evidence |
 | --- | --- | --- | --- |
@@ -61,6 +61,23 @@ Validated locally with Node 26.5.0, pnpm 11.11.0, PostgreSQL, Redis and the dige
 - The trusted synthetic TypeScript pagination function is transpiled and executed for both original revisions: the base returns `[1,2,3]` and `[1]`; the regression returns `[1,2]` and `[]` for page sizes three and one.
 - Historical reports are inspected over HTTP after comparison. Re-finalization returns the frozen snapshot, SQL update attempts leave snapshots/decisions intact, and dismiss/reopen events preserve their append order. The publication rollback test also checks that failed finalization leaves no snapshot and retry creates exactly one.
 - The checked-in deterministic Git bundle preserves the original two commit SHAs and adds moved, renamed, fixed and ambiguous scenario refs. The runbook documents named fixture replay, inspection and `pnpm finding:decide`.
+
+## Feature 06 evidence — November 17, 2026
+
+Current GitHub report finalization now commits revision-scoped inline publication intents with finding history, the frozen report, current-pointer promotion and the summary outbox. Intents retain app markers, head-side paths/lines, comment bodies, skip/supersession reasons and confirmed remote review/comment IDs. The publisher validates unified hunk counts, uses added head source lines across multiple hunks and explicit rename destinations, then rechecks the exact comparison and full source excerpt before publication. Each eligible finding uses the GitHub review API with `COMMENT`, its reviewed head commit and `side: RIGHT`.
+
+Inline writes share the summary's installation/PR advisory locks, access checks and live base/head/current-pointer guard. A push before the write skips stale publication and reconciles the persistent summary. A push during the write leaves the comment attached to its reviewed commit and reconciles the new comparison. Missing patches, mismatched excerpts and rejected anchors retain their findings in both report and summary. Recovery paginates review comments and verifies the authenticated App's reserved bot identity, marker, original commit, path, line and side; user copies, other revisions and replies cannot impersonate a publication. Prior reports and threads are retained.
+
+Validated locally with Node 26.5.0, pnpm 11.11.0, PostgreSQL, Redis and the pinned Semgrep image:
+
+- Build and typecheck pass; all 34 unit tests pass. HTTP transport tests verify explicit commit/line/side submission, review-comment pagination, authenticated bot ownership, scoped write credentials and revocation checks. Parser tests cover multiple hunks after deletions, omitted hunk counts, no final newline, rename destinations and malformed/truncated patches.
+- All 51 integration checks pass (the full 48-check suite followed by the expanded 21-check publication suite). The normal webhook/dispatcher/queue/worker path validates two findings and publishes them to source lines 2 and 10 in separate hunks after a deletion. Concurrent publishers produce one thread per finding and one summary.
+- Moving the live head during the last source read prevents the stale inline write, marks unposted intent superseded, queues the new comparison and updates the same summary to pending. A separate push during remote creation retains the reviewed commit on the first thread and prevents the remaining stale write.
+- A successful remote review followed by a timeout is recovered after webhook replay/restart without another create. The same finding on a later revision preserves its stable ID, prior snapshot and original thread. A returned review ID with temporarily unavailable comment confirmation also prevents another create.
+- Missing/rejected anchors, missing live patches and mismatched source excerpts preserve report and summary evidence. An injected inline-intent storage failure rolls back the report, history snapshot, pointer and both publication intents; retry commits and publishes once.
+- Migration `20261117050000_inline_comments` is applied locally; Prisma's schema/database diff reports no difference. The compiled CLI/API/worker smoke test passes, including PostgreSQL outage/readiness recovery. An accidentally overlapping focused rerun was interrupted by the smoke test's deliberate database shutdown; it was rerun successfully after recovery, and the abandoned test schema was removed.
+
+The [runbook](../README.md#verified-inline-comments) documents publication states, retry behavior, ownership recovery and single-line anchor behavior. GitHub is mocked in acceptance tests; no live GitHub App review or hosted CI run was performed.
 
 ## Starting a work session
 

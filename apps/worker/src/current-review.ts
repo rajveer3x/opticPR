@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from '@opticpr/database';
 import type { GitHubRepositoryClient } from '@opticpr/repository';
 import { lockInstallation, repositoryScope, runIdentity } from '@opticpr/runtime';
 import { snapshotFindingHistory } from './finding-history.js';
+import { inlineIntents } from './inline-comments.js';
 
 type Tx = Prisma.TransactionClient;
 export const reviewTransactionOptions = { maxWait: 15000, timeout: 120000 };
@@ -57,6 +58,12 @@ export async function observeLiveTarget(tx: Tx, scope: GitHubScope, number: numb
     create: { repositoryId: scope.repositoryId, number, desiredRunKey: run.logicalKey, baseSha: run.baseSha, headSha: run.headSha, ...(completed ? { latestRunId: run.id } : {}) },
     update: { desiredRunKey: run.logicalKey, baseSha: run.baseSha, headSha: run.headSha, eligible: true, ...(completed ? { latestRunId: run.id } : {}) },
   });
+  if (previous?.desiredRunKey !== run.logicalKey) {
+    await tx.inlinePublication.updateMany({ where: { state: 'pending', runId: { not: run.id },
+      run: { source: 'github', repositoryId: scope.repositoryId, pullRequestNumber: number } },
+      data: { state: 'superseded', reason: 'PR comparison changed before inline publication; evidence retained in report' } });
+    await tx.inlinePublication.updateMany({ where: { runId: run.id, state: 'superseded' }, data: { state: 'pending', reason: null } });
+  }
   if (completed || (previous?.commentId && previous.desiredRunKey !== run.logicalKey)) {
     await publicationIntent(tx, scope.repositoryId, number, run.id);
   }
@@ -78,6 +85,7 @@ export async function finalizeGitHubReview(db: PrismaClient, runId: string, rawR
       report: completedReport as Prisma.InputJsonValue, state: 'completed', completedAt: new Date(), error: null,
     } });
     if (!stored.count || !target || target.pr.desiredRunKey !== run.logicalKey || target.pr.baseSha !== run.baseSha || target.pr.headSha !== run.headSha) return;
+    await inlineIntents(tx, completedReport);
     const advanced = await tx.pullRequest.updateMany({ where: {
       repositoryId: run.repositoryId, number: run.pullRequestNumber, eligible: true,
       desiredRunKey: run.logicalKey, baseSha: run.baseSha, headSha: run.headSha,

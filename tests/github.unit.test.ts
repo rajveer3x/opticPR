@@ -112,3 +112,46 @@ it('publishes with a repository-scoped write token and paginates app ownership r
   await expect(client.createComment(7, 'denied')).rejects.toThrow('revoked');
   expect(calls).toHaveLength(count);
 });
+
+it('submits head-side source lines through the review API and recovers only the authenticated app bot', async () => {
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const comment = { id: 71, pull_request_review_id: 70, body: 'marker', path: 'src/new.ts', original_commit_id: headSha,
+    original_line: 10, line: 14, side: 'RIGHT', user: { type: 'Bot', login: 'opticpr[bot]' } };
+  vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({ url: String(url), init });
+    const target = new URL(String(url));
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    let data: unknown;
+    if (target.pathname.endsWith('/access_tokens')) data = { token: 'review-token', expires_at: new Date(Date.now() + 3600000).toISOString() };
+    else if (target.pathname === '/app') data = { id: 999, slug: 'opticpr' };
+    else if (init?.method === 'POST') data = { id: 70 };
+    else if (target.searchParams.get('page') === '2') data = [comment];
+    else {
+      data = [{ ...comment, id: 72, user: { type: 'User', login: 'reviewer' } },
+        { ...comment, id: 73, user: { type: 'Bot', login: 'other-app[bot]' } }, { ...comment, id: 74, in_reply_to_id: 71 },
+        { ...comment, id: 75, user: null }];
+      headers.link = '<https://api.github.com/repos/selected/repository/pulls/7/comments?per_page=100&page=2>; rel="next"';
+    }
+    return new Response(JSON.stringify(data), { status: 200, headers });
+  });
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
+  let allowed = true;
+  const client = githubClientFactory({ appId: '999', privateKey }, true)(scope, async () => { if (!allowed) throw new Error('revoked'); });
+  expect(await client.createReview(7, headSha, { path: 'src/new.ts', line: 10, side: 'RIGHT', body: 'marker\nFinding' })).toBe('70');
+  const post = calls.find(call => call.url.endsWith('/pulls/7/reviews'))!;
+  expect(JSON.parse(String(post.init?.body))).toEqual({ commit_id: headSha, event: 'COMMENT', body: 'marker',
+    comments: [{ path: 'src/new.ts', line: 10, side: 'RIGHT', body: 'marker\nFinding' }] });
+  const comments = await client.reviewComments(7);
+  expect(comments.map(item => item.appOwned)).toEqual([false, false, true, false, true]);
+  expect(comments.at(-1)).toMatchObject({ id: '71', reviewId: '70', originalCommitId: headSha, originalLine: 10, path: 'src/new.ts', side: 'RIGHT', reply: false });
+  expect(comments[2]?.reply).toBe(true);
+  const count = calls.length;
+  await expect(client.createReview(7, headSha, { path: '../unsafe', line: 10, side: 'RIGHT', body: 'x' })).rejects.toThrow('Invalid repository path');
+  allowed = false;
+  await expect(client.reviewComments(7)).rejects.toThrow('revoked');
+  await expect(client.createReview(7, headSha, { path: 'src/new.ts', line: 10, side: 'RIGHT', body: 'x' })).rejects.toThrow('revoked');
+  expect(calls).toHaveLength(count);
+  const readOnly = githubClientFactory({ appId: '999', privateKey })(scope, async () => {});
+  await expect(readOnly.reviewComments(7)).rejects.toThrow('Publication credentials required');
+  await expect(readOnly.createReview(7, headSha, { path: 'src/new.ts', line: 10, side: 'RIGHT', body: 'x' })).rejects.toThrow('Publication credentials required');
+});

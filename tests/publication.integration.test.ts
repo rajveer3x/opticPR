@@ -1,10 +1,10 @@
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import type { Server } from 'node:http';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { PrismaClient } from '../packages/database/src/index.js';
 import { githubConfig, reportSchema, type Report } from '../packages/contracts/src/index.js';
-import { GitHubRepositoryAdapter, type GitHubPublicationClientFactory, type SummaryComment } from '../packages/repository/src/index.js';
+import { GitHubRepositoryAdapter, type ChangedFile, type GitHubPublicationClientFactory, type SummaryComment, type ReviewComment } from '../packages/repository/src/index.js';
 import { createQueue, repositoryScope, waitForReport, type Worker } from '../packages/runtime/src/index.js';
 import { createApp } from '../apps/api/src/app.js';
 import { createWorker } from '../apps/worker/src/worker.js';
@@ -12,6 +12,7 @@ import { createDispatcher } from '../apps/worker/src/dispatcher.js';
 import { finalizeGitHubReview, readCurrentReview } from '../apps/worker/src/current-review.js';
 import { analyzeGitHubIntake } from '../apps/worker/src/analyze.js';
 import { createPublisher, retryPublication, summaryMarker } from '../apps/worker/src/publication.js';
+import { inlineMarker } from '../apps/worker/src/inline-comments.js';
 
 const namespace = `publication_test_${randomUUID().replaceAll('-', '')}`;
 const url = new URL(process.env.DATABASE_URL!);
@@ -20,6 +21,15 @@ const admin = new PrismaClient();
 const db = new PrismaClient({ datasourceUrl: url.toString() });
 const live = new Map<number, { baseSha: string; headSha: string; state: string; draft: boolean }>();
 const comments = new Map<number, SummaryComment[]>();
+const threads = new Map<number, ReviewComment[]>();
+const comparisons = new Map<string, ChangedFile[]>();
+const sources = new Map<string, string>();
+let inlineLostResponse = false;
+let rejectInlineLine: number | undefined;
+let beforeInlineGuard: (() => void) | undefined;
+let afterInlineWrite: (() => void) | undefined;
+let hideConfirmation = false;
+let inlineWrites = 0;
 const defaults = { baseSha: 'a'.repeat(40), headSha: 'b'.repeat(40), state: 'open', draft: false };
 const secret = 'test-publication-secret';
 let nextComment = 1;
@@ -30,8 +40,8 @@ let afterWrite: ((number: number) => void) | undefined;
 let compareGate: ((headSha: string) => Promise<void>) | undefined;
 const clients: GitHubPublicationClientFactory = (scope, assertAccess) => ({
   async pullRequest(number) { await assertAccess(); return { number, repositoryId: scope.repositoryId, ...(live.get(number) ?? defaults) }; },
-  async compare(baseSha, headSha) { await assertAccess(); await compareGate?.(headSha); return [{ path: 'src/index.ts', hunk: `@@\n-${baseSha}\n+${headSha}` }]; },
-  async file() { await assertAccess(); return 'source'; },
+  async compare(baseSha, headSha) { await assertAccess(); await compareGate?.(headSha); return comparisons.get(headSha) ?? [{ path: 'src/index.ts', hunk: `@@\n-${baseSha}\n+${headSha}` }]; },
+  async file(sha, path) { await assertAccess(); beforeInlineGuard?.(); return sources.get(`${sha}:${path}`) ?? 'source'; },
   async comments(number) { await assertAccess(); if (failRemote) throw failRemote; return [...(comments.get(number) ?? [])]; },
   async createComment(number, body) {
     await assertAccess(); writes++;
@@ -48,6 +58,17 @@ const clients: GitHubPublicationClientFactory = (scope, assertAccess) => ({
       if (comment) { comment.body = body; afterWrite?.(number); return; }
     }
     throw Object.assign(new Error('deleted'), { status: 404 });
+  },
+  async reviewComments(number) { await assertAccess(); return hideConfirmation ? [] : structuredClone(threads.get(number) ?? []); },
+  async createReview(number, headSha, comment) {
+    await assertAccess(); inlineWrites++;
+    if (comment.line === rejectInlineLine) throw Object.assign(new Error('Invalid anchor'), { status: 422 });
+    const id = String(nextComment++), reviewId = String(nextComment++);
+    threads.set(number, [...(threads.get(number) ?? []), { id, reviewId, body: comment.body, appOwned: true,
+      path: comment.path, originalLine: comment.line, originalCommitId: headSha, side: comment.side, reply: false }]);
+    afterInlineWrite?.();
+    if (inlineLostResponse) { inlineLostResponse = false; throw new Error('Review succeeded, response timed out'); }
+    return reviewId;
   },
 });
 let server: Server;
@@ -91,6 +112,26 @@ async function pointer(number: number) { return readCurrentReview(db, '200', num
 async function intent(number: number) { return db.reviewPublication.findUniqueOrThrow({ where: { repositoryId_pullRequestNumber: { repositoryId: '200', pullRequestNumber: number } } }); }
 async function due(number: number) { await db.reviewPublication.update({ where: { repositoryId_pullRequestNumber: { repositoryId: '200', pullRequestNumber: number } }, data: { nextAttemptAt: new Date(0) } }); }
 function visible(number: number) { return (comments.get(number) ?? []).filter(comment => comment.appOwned); }
+const inlineSource = ['export function first(input: string) {', '  eval(input);', '}', '', '// gap', '// gap', '// gap', '',
+  'export function later(input: string) {', '  eval(input);', '}'].join('\n');
+const inlinePatch = '@@ -1,4 +1,3 @@\n export function first(input: string) {\n-obsolete\n-old\n+  eval(input);\n }\n@@ -10,2 +9,3 @@\n export function later(input: string) {\n+  eval(input);\n }';
+async function inlineRun(number: number, revision = 0) {
+  const headSha = createHash('sha1').update(`inline:${number}:${revision}`).digest('hex');
+  comparisons.set(headSha, [{ path: 'src/review.ts', hunk: inlinePatch, status: 'renamed', previousPath: 'src/old.ts' }]);
+  sources.set(`${headSha}:src/review.ts`, inlineSource);
+  return dispatch(number, headSha);
+}
+async function inlineReport(run: Awaited<ReturnType<typeof dispatch>>, lines = [2]) {
+  const report = await prepareReport(run);
+  report.comparison = comparisons.get(run.headSha);
+  report.findings = lines.map(line => ({ id: `temporary-${line}`, source: 'github', ruleId: 'opticpr.dynamic-eval', severity: 'high',
+    title: `Finding at ${line}`, impact: 'Untrusted input executes.', verification: 'Check input validation.',
+    identity: { kind: 'static', class: 'opticpr.dynamic-eval', expression: 'eval(input)', symbol: line === 2 ? 'first' : 'later' },
+    evidence: { revision: run.headSha, path: 'src/review.ts', startLine: line, endLine: line,
+      excerpt: inlineSource.split('\n')[line - 1]!, hunk: inlinePatch } }));
+  await finalize(run, report);
+  return reportSchema.parse((await db.reviewRun.findUniqueOrThrow({ where: { id: run.id } })).report);
+}
 
 beforeAll(async () => {
   await admin.$executeRawUnsafe(`CREATE SCHEMA "${namespace}"`);
@@ -338,4 +379,148 @@ it('cancels publication on revocation and fences an old publisher after re-selec
     expect(await intent(10)).toMatchObject({ state: 'published' });
     expect(visible(10)).toHaveLength(1);
   } finally { release.release(); await stalePublisher; }
+});
+
+it('publishes worker-validated findings on the correct source lines across hunks after a deletion', async () => {
+  await queue.drain();
+  const run = await inlineRun(20);
+  secondWorker = createWorker(db, namespace, clients, {
+    scanner: async files => ({ errors: 0, scanned: files.map(file => file.path), matches: [2, 10].map(line => ({ path: 'src/review.ts',
+      ruleId: 'opticpr.dynamic-eval', severity: 'high', startLine: line, endLine: line, message: `Unsafe eval at ${line}` })) }),
+    inference: async () => '{"candidates":[]}',
+  });
+  await secondWorker.waitUntilReady();
+  try {
+    const report = reportSchema.parse((await waitForReport(db, run.id)).report);
+    expect(report.findings).toHaveLength(2);
+    const planned = await db.inlinePublication.findMany({ where: { runId: run.id } });
+    expect(planned).toHaveLength(2);
+    expect(planned.every(item => item.state === 'pending' && !item.commentId && !item.reviewId)).toBe(true);
+    const other = new PrismaClient({ datasourceUrl: url.toString() });
+    try { await Promise.all([publisher.tick(), createPublisher(other, clients).tick()]); } finally { await other.$disconnect(); }
+    expect(threads.get(20)?.map(item => item.originalLine).sort((a, b) => a! - b!)).toEqual([2, 10]);
+    expect(threads.get(20)?.every(item => item.path === 'src/review.ts' && item.side === 'RIGHT' && item.originalCommitId === run.headSha)).toBe(true);
+    expect(visible(20)).toHaveLength(1);
+    const confirmed = await db.inlinePublication.findMany({ where: { runId: run.id } });
+    expect(confirmed.every(item => item.state === 'published' && item.commentId && item.reviewId)).toBe(true);
+  } finally { await secondWorker?.close(); secondWorker = undefined; }
+}, 15000);
+
+it('keeps missing and rejected anchors in the summary and immutable report while publishing eligible findings', async () => {
+  const run = await inlineRun(21);
+  const report = await inlineReport(run, [2, 5, 10]);
+  rejectInlineLine = 10;
+  try { await publisher.tick(); } finally { rejectInlineLine = undefined; }
+  expect(threads.get(21)).toHaveLength(1);
+  expect(threads.get(21)![0]!.originalLine).toBe(2);
+  const plans = await db.inlinePublication.findMany({ where: { runId: run.id } });
+  expect(plans.filter(item => item.state === 'skipped')).toHaveLength(2);
+  expect(plans.some(item => item.reason?.includes('422'))).toBe(true);
+  expect(await intent(21)).toMatchObject({ state: 'published' });
+  for (const line of [2, 5, 10]) expect(visible(21)[0]!.body).toContain(`Finding at ${line}`);
+  expect((await db.findingSnapshot.findUniqueOrThrow({ where: { runId: run.id } })).report).toEqual(report);
+});
+
+it('skips a stale inline write when a line moves immediately before posting and reconciles the summary', async () => {
+  const run = await inlineRun(22), report = await inlineReport(run);
+  const before = inlineWrites;
+  beforeInlineGuard = () => {
+    beforeInlineGuard = undefined;
+    live.set(22, { ...defaults, headSha: '9'.repeat(40) });
+  };
+  try { await publisher.tick(); } finally { beforeInlineGuard = undefined; }
+  expect(inlineWrites).toBe(before);
+  expect(threads.get(22)).toBeUndefined();
+  expect(visible(22)).toHaveLength(1);
+  expect(visible(22)[0]!.body).toContain('Review pending');
+  const fresh = await db.reviewRun.findUniqueOrThrow({ where: { logicalKey: (await pointer(22))!.desiredRunKey } });
+  expect(fresh.headSha).toBe('9'.repeat(40));
+  expect(await db.inlinePublication.findFirst({ where: { runId: run.id } })).toMatchObject({ state: 'superseded' });
+  expect((await db.findingSnapshot.findUniqueOrThrow({ where: { runId: run.id } })).report).toEqual(report);
+  await finalize(fresh); await publisher.tick();
+  expect(visible(22)[0]!.body).toContain(`Reviewed SHA: \`${fresh.headSha}\``);
+});
+
+it('recovers one thread and one summary after a successful review times out, and preserves prior revision evidence', async () => {
+  const run = await inlineRun(23), report = await inlineReport(run);
+  const marker = inlineMarker(report, report.findings[0]!.id);
+  // Neither a user copy nor another commit can impersonate this publication.
+  const copy: ReviewComment = { id: '90001', reviewId: '90002', body: marker, path: 'src/review.ts', originalLine: 2,
+    originalCommitId: run.headSha, side: 'RIGHT', reply: false, appOwned: false };
+  threads.set(23, [copy, { ...copy, id: '90003', appOwned: true, originalCommitId: defaults.headSha }]);
+  inlineLostResponse = true;
+  await publisher.tick();
+  expect(await intent(23)).toMatchObject({ state: 'pending', attempts: 1 });
+  expect(await db.inlinePublication.findFirst({ where: { runId: run.id } })).toMatchObject({ state: 'pending', commentId: null });
+  const before = inlineWrites;
+  await dispatch(23, run.headSha); await due(23); await createPublisher(db, clients).tick();
+  expect(inlineWrites).toBe(before);
+  expect(threads.get(23)?.filter(item => item.appOwned && item.originalCommitId === run.headSha)).toHaveLength(1);
+  expect(visible(23)).toHaveLength(1);
+  expect(await intent(23)).toMatchObject({ state: 'published' });
+  const oldThread = structuredClone(threads.get(23)!.at(-1));
+  const later = await inlineRun(23, 1), laterReport = await inlineReport(later);
+  expect(laterReport.findings[0]!.id).toBe(report.findings[0]!.id);
+  await publisher.tick();
+  expect(threads.get(23)).toContainEqual(oldThread);
+  expect(threads.get(23)?.filter(item => item.appOwned && [run.headSha, later.headSha].includes(item.originalCommitId))).toHaveLength(2);
+  expect(visible(23)).toHaveLength(1);
+  expect((await db.findingSnapshot.findUniqueOrThrow({ where: { runId: run.id } })).report).toEqual(report);
+});
+
+it('pins an in-flight inline review to its reviewed commit and reconciles a push during the write', async () => {
+  const run = await inlineRun(24); await inlineReport(run, [2, 10]);
+  afterInlineWrite = () => { afterInlineWrite = undefined; live.set(24, { ...defaults, headSha: '8'.repeat(40) }); };
+  try { await publisher.tick(); } finally { afterInlineWrite = undefined; }
+  expect(threads.get(24)).toHaveLength(1);
+  expect(threads.get(24)![0]!.originalCommitId).toBe(run.headSha);
+  expect(visible(24)).toHaveLength(1);
+  expect(visible(24)[0]!.body).toContain('Review pending');
+  expect(await db.inlinePublication.count({ where: { runId: run.id, state: 'superseded' } })).toBe(1);
+});
+
+it('waits for confirmation after a known successful review without creating another thread', async () => {
+  const run = await inlineRun(25); await inlineReport(run);
+  hideConfirmation = true;
+  try {
+    await publisher.tick();
+    const before = inlineWrites;
+    await due(25); await publisher.tick();
+    expect(inlineWrites).toBe(before);
+    expect(threads.get(25)).toHaveLength(1);
+  } finally { hideConfirmation = false; }
+  await due(25); await publisher.tick();
+  expect(await intent(25)).toMatchObject({ state: 'published' });
+  expect(threads.get(25)).toHaveLength(1);
+});
+
+it.each(['missing-patch', 'changed-excerpt'])('retains report evidence when publication revalidation finds %s', async mismatch => {
+  const number = mismatch === 'missing-patch' ? 26 : 27;
+  const run = await inlineRun(number), report = await inlineReport(run);
+  if (mismatch === 'missing-patch') comparisons.set(run.headSha, [{ path: 'src/review.ts', hunk: '' }]);
+  else sources.set(`${run.headSha}:src/review.ts`, inlineSource.replace('  eval(input);', '  safe(input);'));
+  const before = inlineWrites;
+  await publisher.tick();
+  expect(inlineWrites).toBe(before);
+  expect(await db.inlinePublication.findFirst({ where: { runId: run.id } })).toMatchObject({ state: 'skipped' });
+  expect(visible(number)[0]!.body).toContain('Finding at 2');
+  expect((await db.findingSnapshot.findUniqueOrThrow({ where: { runId: run.id } })).report).toEqual(report);
+});
+
+it('commits inline intent atomically with report, snapshot, current pointer and summary intent', async () => {
+  const run = await inlineRun(28);
+  await db.$executeRawUnsafe('ALTER TABLE "InlinePublication" ADD CONSTRAINT "test_inline_failure" CHECK (false) NOT VALID');
+  try {
+    await expect(inlineReport(run)).rejects.toThrow();
+    expect(await db.reviewRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({ state: 'queued', report: null });
+    expect((await pointer(28))?.latestRunId).toBeNull();
+    expect(await db.findingSnapshot.count({ where: { runId: run.id } })).toBe(0);
+    expect(await db.inlinePublication.count({ where: { runId: run.id } })).toBe(0);
+    expect(await db.reviewPublication.count({ where: { runId: run.id } })).toBe(0);
+  } finally { await db.$executeRawUnsafe('ALTER TABLE "InlinePublication" DROP CONSTRAINT "test_inline_failure"'); }
+  await inlineReport(run);
+  expect(await db.inlinePublication.count({ where: { runId: run.id } })).toBe(1);
+  await publisher.tick();
+  expect(threads.get(28)).toHaveLength(1);
+  expect(visible(28)).toHaveLength(1);
 });

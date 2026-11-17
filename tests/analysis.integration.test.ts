@@ -3,7 +3,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { githubConfig, reportSchema, type GitHubScope } from '../packages/contracts/src/index.js';
 import { Prisma, PrismaClient } from '../packages/database/src/index.js';
-import { FixtureRepositoryAdapter, type GitHubPublicationClientFactory } from '../packages/repository/src/index.js';
+import { FixtureRepositoryAdapter, type GitHubPublicationClientFactory, type ReviewComment } from '../packages/repository/src/index.js';
 import { createQueue, enqueueRun, repositoryScope, waitForReport, type Worker } from '../packages/runtime/src/index.js';
 import { createWorker } from '../apps/worker/src/worker.js';
 import { createPublisher } from '../apps/worker/src/publication.js';
@@ -27,6 +27,7 @@ let failFinalization = false;
 const source = 'export function run(input: string) {\n  eval(input);\n}\n';
 const patch = '@@ -1,2 +1,3 @@\n export function run(input: string) {\n+  eval(input);\n }';
 const comments = new Map<number, { id: string; body: string; appOwned: boolean }[]>();
+const reviewComments = new Map<number, ReviewComment[]>();
 const clients: GitHubPublicationClientFactory = (scope, access) => ({
   async pullRequest(number) {
     await access();
@@ -40,6 +41,13 @@ const clients: GitHubPublicationClientFactory = (scope, access) => ({
   async comments(number) { await access(); return comments.get(number) ?? []; },
   async createComment(number, body) { await access(); const id = String(number); comments.set(number, [{ id, body, appOwned: true }]); return id; },
   async updateComment(id, body) { await access(); comments.get(Number(id))![0]!.body = body; },
+  async reviewComments(number) { await access(); return reviewComments.get(number) ?? []; },
+  async createReview(number, headSha, comment) {
+    await access();
+    const id = String(number);
+    reviewComments.set(number, [{ ...comment, id, reviewId: id, appOwned: true, originalCommitId: headSha, originalLine: comment.line, reply: false }]);
+    return id;
+  },
 });
 const scanner: StaticScanner = async files => {
   scannerCalls++;

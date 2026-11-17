@@ -74,4 +74,4 @@ export class FixtureRepositoryAdapter implements RepositoryAdapter {
 }
 
 export { GitHubRepositoryAdapter, IneligiblePullRequestError, githubClientFactory, githubClientsFromEnv, githubPublicationClientsFromEnv } from './github.js';
-export type { GitHubClientFactory, GitHubRepositoryClient, GitHubPublicationClientFactory, GitHubPublicationClient, SummaryComment } from './github.js';
+export type { GitHubClientFactory, GitHubRepositoryClient, GitHubPublicationClientFactory, GitHubPublicationClient, SummaryComment, ReviewAnchor, ReviewComment } from './github.js';

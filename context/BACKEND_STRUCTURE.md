@@ -10,6 +10,8 @@ Commit Semgrep matches and scan completion together before invoking Ollama. Fina
 
 Serialize GitHub publication per PR. Read live revisions before database promotion and again before each remote write. Recheck after a write and reconcile any intervening update. Persist remote IDs and app-owned markers to recover from an ambiguous response.
 
+Commit per-run/finding `InlinePublication` intents with current report completion. Retain the reviewed commit, destination path, added head source line, marker and body; record confirmed review/comment IDs without rewriting historical evidence. Validate complete unified hunks and exact head source before submitting `COMMENT` reviews. Match recovery against the authenticated App bot and original revision/path/line, excluding replies. Missing/rejected anchors remain in the report and persistent summary; superseded unposted intents remain inspectable.
+
 ## Access and HTTP
 
 | Operation | Authority | Result |
