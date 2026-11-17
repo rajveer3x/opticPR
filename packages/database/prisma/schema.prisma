@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+model ReviewRun {
+  id                  String   @id @default(uuid()) @db.Uuid
+  logicalKey          String   @unique @db.VarChar(64)
+  installationId      String?
+  grantVersion        String? @db.Uuid
+  source              String
+  repositoryId        String
+  pullRequestNumber   Int
+  baseSha             String   @db.VarChar(40)
+  headSha             String   @db.VarChar(40)
+  configurationDigest String   @db.VarChar(64)
+  configuration       Json
+  state               String   @default("queued")
+  report              Json?
+  error               String?
+  createdAt           DateTime @default(now())
+  startedAt           DateTime?
+  completedAt         DateTime?
+  updatedAt           DateTime @updatedAt
+  currentFor          PullRequest[] @relation("LatestReview")
+  publications        ReviewPublication[]
+  @@index([source, state])
+}
+
+model PullRequest {
+  repositoryId      String
+  number            Int
+  desiredRunKey     String @db.VarChar(64)
+  baseSha           String @db.VarChar(40)
+  headSha           String @db.VarChar(40)
+  eligible          Boolean @default(true)
+  latestRunId       String? @db.Uuid
+  latestRun         ReviewRun? @relation("LatestReview", fields: [latestRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  commentId         String?
+  publishedRunId    String? @db.Uuid
+  updatedAt         DateTime @updatedAt
+  publication       ReviewPublication?
+  @@id([repositoryId, number])
+}
+
+// One durable, replaceable publication intent per PR; runId preserves its revision.
+model ReviewPublication {
+  repositoryId      String
+  pullRequestNumber Int
+  pullRequest       PullRequest @relation(fields: [repositoryId, pullRequestNumber], references: [repositoryId, number], onDelete: NoAction, onUpdate: NoAction, map: "ReviewPublication_pullRequest_fkey")
+  runId             String @db.Uuid
+  run               ReviewRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  state             String @default("pending")
+  attempts          Int @default(0)
+  nextAttemptAt     DateTime @default(now())
+  error             String?
+  diagnostics       Json?
+  updatedAt         DateTime @updatedAt
+  @@id([repositoryId, pullRequestNumber])
+  @@index([state, nextAttemptAt])
+}
+
+model GitHubInstallation {
+  id           String @id
+  active       Boolean @default(true)
+  repositories GitHubRepository[]
+  updatedAt    DateTime @updatedAt
+}
+
+model GitHubRepository {
+  id             String @id
+  installationId String
+  installation   GitHubInstallation @relation(fields: [installationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  owner          String
+  name           String
+  active         Boolean @default(true)
+  grantVersion   String @default(uuid()) @db.Uuid
+  updatedAt      DateTime @updatedAt
+  @@index([installationId, active])
+}
+
+model WebhookReceipt {
+  id             String @id
+  payloadDigest  String @db.VarChar(64)
+  event          String
+  action         String?
+  disposition    String
+  createdAt      DateTime @default(now())
+  outbox         IntakeOutbox?
+}
+
+model IntakeOutbox {
+  id                String @id @default(uuid()) @db.Uuid
+  deliveryId        String @unique
+  delivery          WebhookReceipt @relation(fields: [deliveryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  installationId    String
+  repositoryId      String
+  pullRequestNumber Int
+  grantVersion      String @db.Uuid
+  state             String @default("pending")
+  runId             String? @db.Uuid
+  attempts          Int @default(0)
+  nextAttemptAt     DateTime @default(now())
+  leaseUntil        DateTime?
+  leaseToken        String? @db.Uuid
+  error             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@index([state, nextAttemptAt])
+}
