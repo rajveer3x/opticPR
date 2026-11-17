@@ -3,9 +3,10 @@ import { PrismaClient, type Prisma } from '@opticpr/database';
 import { FixtureRepositoryAdapter, GitHubRepositoryAdapter, IneligiblePullRequestError, githubClientsFromEnv, type GitHubClientFactory, type RepositoryAdapter } from '@opticpr/repository';
 import { Worker, queueName, redisOptions, logger, runIdentity, repositoryScope, AccessRevokedError } from '@opticpr/runtime';
 import { analyzeFixture, analyzeGitHubIntake } from './analyze.js';
+import { analyzeLocal, type AnalysisServices } from './local-analysis.js';
 import { finalizeGitHubReview } from './current-review.js';
 
-export function createWorker(db: PrismaClient, name = queueName, clients: GitHubClientFactory = githubClientsFromEnv()) {
+export function createWorker(db: PrismaClient, name = queueName, clients: GitHubClientFactory = githubClientsFromEnv(), services: AnalysisServices = {}) {
   const worker = new Worker(name, async job => {
     const { runId } = queueJobSchema.parse(job.data);
     const started = Date.now();
@@ -30,7 +31,9 @@ export function createWorker(db: PrismaClient, name = queueName, clients: GitHub
         if (configuration.adapter !== 'pagination-bundle-v1') throw new Error('Invalid fixture configuration');
         adapter = await FixtureRepositoryAdapter.open();
       }
-      const report = await (input.source === 'fixture' ? analyzeFixture : analyzeGitHubIntake)(adapter, input, configuration, { runId, ...identity });
+      const report = configuration.analyzer === 'local-analysis'
+        ? await analyzeLocal(db, adapter, input, configuration, { runId, ...identity }, services)
+        : await (input.source === 'fixture' ? analyzeFixture : analyzeGitHubIntake)(adapter, input, configuration, { runId, ...identity });
       if (githubClient) await finalizeGitHubReview(db, runId, report, githubClient);
       else await db.$transaction(async tx => {
         await tx.reviewRun.updateMany({ where: fence, data: {

@@ -142,7 +142,7 @@ it('deduplicates ten concurrent deliveries, measures acknowledgment p95 and queu
     expect(await db.reviewRun.count({ where: { pullRequestNumber: 2 } })).toBe(1);
   } finally { await worker.resume(); }
   const run = await waitForReport(db, (await runFor(2)).id);
-  expect(reportSchema.parse(run.report)).toMatchObject({ source: 'github', coverage: { status: 'unknown', analyzedFiles: [] }, findings: [] });
+  expect(reportSchema.parse(run.report)).toMatchObject({ source: 'github', coverage: { status: 'partial', analyzedFiles: [] }, findings: [] });
   expect((await send('pull_request', pull(2, 'synchronize'), id)).status).toBe(409);
   // Live data remains inaccessible through the unauthenticated fixture inspection route.
   expect((await fetch(`${origin}/api/runs/${run.id}`)).status).toBe(404);

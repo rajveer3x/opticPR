@@ -1,0 +1,172 @@
+{
+  "measuredAt": "2026-11-17T14:22:53.664Z",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "totalMemoryBytes": 17179869184
+  },
+  "ollama": {
+    "version": "0.31.1"
+  },
+  "model": "qwen2.5-coder:7b",
+  "modelRevision": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+  "input": {
+    "source": "fixture",
+    "repositoryId": "fixture/pagination",
+    "pullRequestNumber": 1,
+    "baseSha": "c92a9a02fefb3d11bb91c60bbf60e332df13b567",
+    "headSha": "7c7d890027156bff7ffe4fd89356ee5234e39f57"
+  },
+  "results": [
+    {
+      "contextTokens": 4096,
+      "contextMode": "diff-only",
+      "runId": "569e4ec7-0778-4132-9c5f-6e011e80409e",
+      "elapsedMs": 13985,
+      "modelLatencyMs": 13942,
+      "peakRunnerRssBytes": 5110317056,
+      "loadedModelBytes": 4740716952,
+      "acceleratorBytes": 4740716952,
+      "loadedContextTokens": 4096,
+      "coverage": "complete",
+      "staticAlerts": 1,
+      "enrichment": {
+        "status": "completed",
+        "accepted": 1,
+        "rejected": 0,
+        "detail": "All supplied candidates independently verified against changed head source."
+      },
+      "candidates": [
+        {
+          "observationId": "d2e9827695902ec19dcedc31d113381fe743db395a02a93ec594970d54178a6e",
+          "ruleId": "opticpr.slice-exclusive-boundary",
+          "title": "A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one.",
+          "impact": "A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one.",
+          "verification": "Confirm the static rule condition using the exact head source and a focused regression case.",
+          "severity": "medium",
+          "revision": "7c7d890027156bff7ffe4fd89356ee5234e39f57",
+          "path": "src/paginate.ts",
+          "startLine": 3,
+          "endLine": 4,
+          "excerpt": "  const end = start + pageSize - 1;\n  return items.slice(start, end);"
+        }
+      ],
+      "contextKinds": [
+        "hunk"
+      ]
+    },
+    {
+      "contextTokens": 4096,
+      "contextMode": "function-context",
+      "runId": "7aad951c-b4a1-4eb1-8e9a-3146f52ebfb0",
+      "elapsedMs": 11640,
+      "modelLatencyMs": 11589,
+      "peakRunnerRssBytes": 4767956992,
+      "loadedModelBytes": 4740716952,
+      "acceleratorBytes": 4740716952,
+      "loadedContextTokens": 4096,
+      "coverage": "complete",
+      "staticAlerts": 1,
+      "enrichment": {
+        "status": "completed",
+        "accepted": 1,
+        "rejected": 0,
+        "detail": "All supplied candidates independently verified against changed head source."
+      },
+      "candidates": [
+        {
+          "observationId": "d2e9827695902ec19dcedc31d113381fe743db395a02a93ec594970d54178a6e",
+          "ruleId": "opticpr.slice-exclusive-boundary",
+          "title": "A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one.",
+          "impact": "A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one.",
+          "verification": "Confirm the static rule condition using the exact head source and a focused regression case.",
+          "severity": "medium",
+          "revision": "7c7d890027156bff7ffe4fd89356ee5234e39f57",
+          "path": "src/paginate.ts",
+          "startLine": 3,
+          "endLine": 4,
+          "excerpt": "  const end = start + pageSize - 1;\n  return items.slice(start, end);"
+        }
+      ],
+      "contextKinds": [
+        "function"
+      ]
+    },
+    {
+      "contextTokens": 8192,
+      "contextMode": "diff-only",
+      "runId": "05576f46-7049-49dd-bf12-5c9f2b81cd15",
+      "elapsedMs": 13866,
+      "modelLatencyMs": 13827,
+      "peakRunnerRssBytes": 5291524096,
+      "loadedModelBytes": 4979792280,
+      "acceleratorBytes": 4979792280,
+      "loadedContextTokens": 8192,
+      "coverage": "complete",
+      "staticAlerts": 1,
+      "enrichment": {
+        "status": "completed",
+        "accepted": 1,
+        "rejected": 0,
+        "detail": "All supplied candidates independently verified against changed head source."
+      },
+      "candidates": [
+        {
+          "observationId": "d2e9827695902ec19dcedc31d113381fe743db395a02a93ec594970d54178a6e",
+          "ruleId": "opticpr.slice-exclusive-boundary",
+          "title": "A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one.",
+          "impact": "A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one.",
+          "verification": "Confirm the static rule condition using the exact head source and a focused regression case.",
+          "severity": "medium",
+          "revision": "7c7d890027156bff7ffe4fd89356ee5234e39f57",
+          "path": "src/paginate.ts",
+          "startLine": 3,
+          "endLine": 4,
+          "excerpt": "  const end = start + pageSize - 1;\n  return items.slice(start, end);"
+        }
+      ],
+      "contextKinds": [
+        "hunk"
+      ]
+    },
+    {
+      "contextTokens": 8192,
+      "contextMode": "function-context",
+      "runId": "09414c1d-0da3-4c45-9f30-bbbb9fd2f919",
+      "elapsedMs": 11721,
+      "modelLatencyMs": 11684,
+      "peakRunnerRssBytes": 5008113664,
+      "loadedModelBytes": 4979792280,
+      "acceleratorBytes": 4979792280,
+      "loadedContextTokens": 8192,
+      "coverage": "complete",
+      "staticAlerts": 1,
+      "enrichment": {
+        "status": "completed",
+        "accepted": 1,
+        "rejected": 0,
+        "detail": "All supplied candidates independently verified against changed head source."
+      },
+      "candidates": [
+        {
+          "observationId": "d2e9827695902ec19dcedc31d113381fe743db395a02a93ec594970d54178a6e",
+          "ruleId": "opticpr.slice-exclusive-boundary",
+          "title": "A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one.",
+          "impact": "A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one.",
+          "verification": "Confirm the static rule condition using the exact head source and a focused regression case.",
+          "severity": "medium",
+          "revision": "7c7d890027156bff7ffe4fd89356ee5234e39f57",
+          "path": "src/paginate.ts",
+          "startLine": 3,
+          "endLine": 4,
+          "excerpt": "  const end = start + pageSize - 1;\n  return items.slice(start, end);"
+        }
+      ],
+      "contextKinds": [
+        "function"
+      ]
+    }
+  ],
+  "methodology": "One sample per setting, deterministic seed and temperature; no explicit cold-cache reset, with model reloads when context size changes. RSS samples every 250ms; loaded/accelerator bytes from Ollama /api/ps. Quality uses exact-evidence acceptance and the known pagination regression. The five-line fixture fits both modes and cannot establish broad comparative review quality."
+}

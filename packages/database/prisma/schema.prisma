@@ -18,6 +18,8 @@ model ReviewRun {
   configurationDigest String   @db.VarChar(64)
   configuration       Json
   state               String   @default("queued")
+  staticCheckpoint    Json?
+  staticCompletedAt   DateTime?
   report              Json?
   error               String?
   createdAt           DateTime @default(now())
@@ -25,6 +27,8 @@ model ReviewRun {
   completedAt         DateTime?
   updatedAt           DateTime @updatedAt
   currentFor          PullRequest[] @relation("LatestReview")
+  observations        RunObservation[]
+  enrichments         RunEnrichment[]
   publications        ReviewPublication[]
   @@index([source, state])
 }
@@ -109,4 +113,23 @@ model IntakeOutbox {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   @@index([state, nextAttemptAt])
+}
+
+// Immutable static evidence is never overwritten by a model proposal.
+model RunObservation {
+  runId       String @db.Uuid
+  fingerprint String @db.VarChar(64)
+  run         ReviewRun @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  finding     Json
+  createdAt   DateTime @default(now())
+  @@id([runId, fingerprint])
+}
+
+model RunEnrichment {
+  runId       String @db.Uuid
+  fingerprint String @db.VarChar(64)
+  run         ReviewRun @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  candidate   Json
+  createdAt   DateTime @default(now())
+  @@id([runId, fingerprint])
 }

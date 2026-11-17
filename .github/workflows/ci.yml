@@ -21,6 +21,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: docker compose up -d --wait
+      - run: pnpm analysis:scanner:pull
       - run: pnpm db:migrate
       - run: pnpm test:integration
       - run: pnpm test:smoke

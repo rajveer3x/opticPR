@@ -1,0 +1,34 @@
+{
+  "rules": [
+    {
+      "id": "opticpr.dynamic-eval",
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "message": "Dynamic evaluation may execute untrusted input. Verify the input cannot be attacker controlled.",
+      "pattern": "eval($INPUT)"
+    },
+    {
+      "id": "opticpr.disabled-tls",
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "message": "TLS certificate verification is disabled. Verify connections reject invalid certificates.",
+      "pattern": "{rejectUnauthorized: false}"
+    },
+    {
+      "id": "opticpr.slice-exclusive-boundary",
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "message": "A decremented exclusive slice boundary can drop the final element. Verify a full page and a page size of one.",
+      "pattern": "const $END = $START + $SIZE - 1;\n...\nreturn $ITEMS.slice($START, $END);"
+    }
+  ]
+}
