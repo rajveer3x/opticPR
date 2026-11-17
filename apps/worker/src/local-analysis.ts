@@ -2,9 +2,10 @@ import { localConfigSchema, modelOutputSchema, reportSchema, staticCheckpointSch
 import { Prisma, type PrismaClient } from '@opticpr/database';
 import type { ChangedFile, RepositoryAdapter } from '@opticpr/repository';
 import { AccessRevokedError, digest } from '@opticpr/runtime';
-import { changedLines, excludedPath, excludedSource, headHunks, sourceContexts, type SourceContext } from './context.js';
+import { changedLines, excludedPath, excludedSource, findingLocation, headHunks, sourceContexts, type SourceContext } from './context.js';
 import { ollamaClient, withInferenceSlot, type InferenceClient } from './inference.js';
-import { scanSemgrep, type StaticScanner, type SnapshotFile } from './semgrep.js';
+import { scanSemgrep, staticRuleIds, type StaticScanner, type SnapshotFile } from './semgrep.js';
+import { previousFindingSnapshot } from './finding-history.js';
 
 type Identity = { runId: string; logicalKey: string; configurationDigest: string };
 type Finding = Report['findings'][number];
@@ -48,12 +49,21 @@ export async function analyzeLocal(
     const revisions = await adapter.revisions();
     if (digest(revisions) !== digest(input)) throw new Error('Repository revision metadata mismatch');
     const changes = await adapter.changedFiles(input.baseSha, input.headSha);
+    const previous = await previousFindingSnapshot(db, stored);
+    const priorPaths = new Set(previous ? reportSchema.parse(previous.report).history?.findings.map(entry => {
+      const path = entry.lastObservation.evidence.path;
+      const renames = changes.filter(change => change.status === 'renamed' && change.previousPath === path);
+      return renames.length === 1 ? renames[0]!.path : path;
+    }) : []);
+    // A real fix can remove a file from the cumulative PR diff altogether.
+    // Recheck prior affected files explicitly, under the same budgets/exclusions.
+    const scopes = [...changes, ...[...priorPaths].filter(path => !changes.some(change => change.path === path)).map(path => ({ path, hunk: '' }))];
     const skippedFiles: { path: string; reason: string }[] = [];
     let lineCount = 0;
-    for (const change of changes) {
+    for (const change of scopes) {
       let reason = excludedPath(change.path);
       const count = changedLines(change);
-      if (!reason && (change.status === 'removed' || !count || !headHunks(change.hunk).some(hunk => hunk.changed.length))) reason = 'no added head lines or missing patch';
+      if (!reason && (('status' in change && change.status === 'removed') || (!priorPaths.has(change.path) && (!count || !headHunks(change.hunk).some(hunk => hunk.changed.length))))) reason = 'no added head lines or missing patch';
       if (!reason && snapshots.length >= configuration.maxFiles) reason = '20-file budget';
       if (!reason && lineCount + count > configuration.maxChangedLines) reason = '800-changed-line budget';
       if (reason) { skippedFiles.push({ path: change.path, reason }); continue; }
@@ -71,18 +81,22 @@ export async function analyzeLocal(
     let scanned: string[] = [];
     let scanErrors = 0;
     let scanFailed = false;
+    const observations: Finding[] = [];
     try {
       const result = await (services.scanner ?? scanSemgrep)(snapshots);
       scanned = result.scanned.filter(path => snapshots.some(file => file.path === path)); scanErrors = result.errors;
-      findings = result.matches.flatMap(match => {
+      for (const match of result.matches) {
         const file = snapshots.find(file => file.path === match.path);
-        if (!file || !scanned.includes(file.path)) return [];
+        if (!file || !scanned.includes(file.path) || match.startLine < 1 || match.endLine < match.startLine || match.endLine > file.source.split('\n').length) continue;
         const proof = evidence(file, input, match.startLine, match.endLine);
-        if (!validAnchor(file, proof)) return [];
         const finding: Finding = { id: '', source: input.source, ruleId: match.ruleId, severity: match.severity,
           title: match.message, impact: match.message, verification: 'Confirm the static rule condition using the exact head source and a focused regression case.', evidence: proof };
-        finding.id = fingerprint(finding); return [finding];
-      });
+        const location = await findingLocation(file.path, file.source, match.startLine, match.endLine);
+        if (location) finding.identity = { kind: 'static', class: match.ruleId, ...location };
+        finding.citations = [{ kind: 'static', ruleId: match.ruleId, evidence: proof }];
+        finding.id = fingerprint(finding); observations.push(finding);
+        if (validAnchor(file, proof)) findings.push(finding);
+      }
       findings = [...new Map(findings.map(finding => [finding.id, finding])).values()];
     } catch { scanFailed = true; }
     for (const file of snapshots) if (!scanned.includes(file.path)) skippedFiles.push({ path: file.path, reason: scanFailed ? 'static scanner unavailable or failed' : 'static scanner skipped file' });
@@ -97,6 +111,7 @@ export async function analyzeLocal(
         detail: 'Coverage is limited to the pinned JS/TS rules and selected changed head files. Model analysis is pending.' },
       comparison: changes.map(change => ({ ...change, hunk: excludedPath(change.path) || excludedSource(change.hunk) ||
         skippedFiles.some(file => file.path === change.path && ['possible embedded secret', 'binary or invalid UTF-8', 'generated code', 'source size budget'].includes(file.reason)) ? '' : change.hunk })), findings,
+      recheck: { completed: !scanFailed && scanErrors === 0, rules: staticRuleIds, files: scanned, observations },
     });
     // Upserts and completed checkpoint are a single durable transaction. A crash or
     // model failure cannot remove or multiply a committed observation.
@@ -143,14 +158,19 @@ export async function analyzeLocal(
         const proof = evidence(file, input, candidate.startLine, candidate.endLine);
         const modelFinding: Finding = { id: '', source: input.source, ruleId: `model:${candidate.ruleId}`, severity: candidate.severity,
           title: candidate.title, impact: candidate.impact, verification: candidate.verification, evidence: proof };
+        const location = await findingLocation(file.path, file.source, candidate.startLine, candidate.endLine);
+        if (location) modelFinding.identity = { kind: 'model', class: observation?.identity?.class ?? candidate.ruleId, ...location };
+        const citation = { kind: 'model' as const, ruleId: candidate.ruleId, evidence: proof };
+        modelFinding.citations = [citation];
         const key = candidate.observationId ?? fingerprint(modelFinding); modelFinding.id = key;
         await db.$transaction(async tx => {
           if (!(await tx.reviewRun.updateMany({ where: fence, data: { error: null } })).count) throw new AccessRevokedError();
           await tx.runEnrichment.upsert({ where: { runId_fingerprint: { runId: identity.runId, fingerprint: key } },
-            create: { runId: identity.runId, fingerprint: key, candidate: candidate as Prisma.InputJsonValue }, update: { candidate: candidate as Prisma.InputJsonValue } });
+            create: { runId: identity.runId, fingerprint: key, candidate: candidate as Prisma.InputJsonValue }, update: {} });
         });
         accepted++;
         if (!observation) novel.push(modelFinding);
+        else observation.citations = [...(observation.citations ?? []), citation];
       }
       if (rejected) { status = 'partial'; detail = 'Rejected candidates with unverified head evidence.'; }
     } catch (error) {

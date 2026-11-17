@@ -182,3 +182,36 @@ pnpm analysis:benchmark /absolute/path/results.json
 ```
 
 It runs 4096/8192 tokens × diff-only/function-context against the same bundled pagination commits, stores reports/checkpoints in PostgreSQL, and records inference latency, sampled runner RSS, loaded model/accelerator bytes, accepted/rejected proposals and exact outputs. See [the measured results](context/benchmarks/04-local-analysis.md) and [raw data](context/benchmarks/04-local-analysis.json). This five-line fixture is an operational comparison, not a broad quality benchmark.
+
+## Finding history across commits
+
+Apply `pnpm db:migrate` and rebuild before restarting services. Each completed review now commits an immutable `FindingSnapshot` alongside its report, current pointer and publication intent. `report.history.previousRunId` identifies the earlier completed snapshot in the same source/repository/PR; findings have stable UUIDs across unambiguous matches. A late worker only compares with runs queued earlier than itself and cannot rewrite either historical snapshot. PostgreSQL rules prevent updates/deletes to snapshots and reviewer decisions.
+
+Matching uses the rule or defect class, Tree-sitter tokens of the cited expression, the enclosing named symbol, and the same file or an explicit rename mapping. Token normalization ignores whitespace/comments while preserving operators and string contents. Repeated plausible matches become `needs_verification`; a nearest-line guess cannot inherit a dismissal. Agreeing static/model observations share a finding while retaining both source citations. `previous.runId` links back to the actual prior observation; `lastObservation` retains its exact SHA, path, lines, excerpt and patch.
+
+History states are `new`, `still_present`, `cleared_by_recheck` and `needs_verification`. Clearing requires the same configuration as the last actual observation, the same deterministic rule, and a completed full-file recheck of the affected scope with no scanner errors. Model failure alone does not invalidate a successful static recheck. Lost model-only observations, scanner skips/errors, configuration changes, uncertain matches and unavailable source retain their earlier evidence as needing verification. Files with prior findings are rechecked even if fixing them removes them from the cumulative PR diff, subject to the existing exclusions and file/line budgets. Full-file matches outside added diff lines can confirm existing findings without introducing unrelated new alerts.
+
+The checked-in bundle includes original, moved, renamed, fixed and ambiguous commits in `fixtures/pagination/history.json`. With API and worker running and the pinned scanner image available, replay the local-analysis sequence:
+
+```sh
+export REPLAY_TIMEOUT_MS=120000
+pnpm fixture:replay original
+pnpm fixture:replay moved
+pnpm fixture:replay fixed
+pnpm run:inspect <original-run-id>
+pnpm run:inspect <moved-run-id>
+pnpm run:inspect <fixed-run-id>
+```
+
+Keep each printed run ID. The original condition is at line 3, the header moves it to line 5, and the fixed snapshot records the successful recheck with the line-5 evidence still available. Named scenarios use local analysis; replay without arguments retains the original deterministic fixture stub and its distinct configuration. Ollama is optional for retaining the static result; unavailable enrichment is labeled partial. Regenerate the bundle and scenario SHAs with `python3 scripts/build-fixture.py`.
+
+Until authenticated maintainer actions arrive in feature 07, append decisions through the local operator CLI using an ID from `report.history.findings`:
+
+```sh
+pnpm finding:decide <run-id> <finding-id> dismiss 'raj' 'Accepted for this synthetic example'
+pnpm finding:decide <run-id> <finding-id> reopen 'raj' 'Needs another review'
+```
+
+Actor and reason are required; the selected run must contain a confirmed observation in that PR. Each command returns a decision UUID, append sequence and time. Supply the returned UUID as the optional final argument when retrying an uncertain response; reuse with different content fails. Decisions never modify past reports. The latest decision carries to the next unambiguous observation, and an uncertain match carries none. Fixture inspection returns the append-only decision audit separately from the frozen report. GitHub summaries include finding-history outcomes and any decision carried into that snapshot; authenticated GitHub report/decision HTTP access remains feature 07.
+
+`pnpm test` covers normalization, matching, source grouping and conservative clearing. `pnpm test:integration` exercises the real Git commits and pinned Semgrep through the normal BullMQ worker, checks historical snapshots over HTTP, and executes only the trusted synthetic pagination function for the boundary assertions. Inference is injected in these tests, so no model or GitHub credentials are needed.

@@ -132,12 +132,14 @@ it('rolls back report and pointer when publication intent fails, then retries th
     expect(await db.reviewRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({ state: 'queued', report: null, completedAt: null });
     expect((await pointer(1))?.latestRunId).toBeNull();
     expect(await db.reviewPublication.count()).toBe(0);
+    expect(await db.findingSnapshot.count({ where: { runId: run.id } })).toBe(0);
   } finally { await db.$executeRawUnsafe('ALTER TABLE "ReviewPublication" DROP CONSTRAINT "test_finalize_failure"'); }
   await finalize(run, report);
   const current = await pointer(1);
   expect(current?.latestRunId).toBe(run.id);
   expect(reportSchema.parse(current?.latestRun?.report).runId).toBe(run.id);
   expect(await intent(1)).toMatchObject({ runId: run.id, state: 'pending' });
+  expect(await db.findingSnapshot.count({ where: { runId: run.id } })).toBe(1);
   await publisher.tick();
   expect(visible(1)).toHaveLength(1);
   expect(visible(1)[0]!.body).toContain(`Reviewed SHA: \`${run.headSha}\``);

@@ -39,6 +39,9 @@ export async function readiness(db: PrismaClient) {
       UNION ALL SELECT "repositoryId" FROM "ReviewPublication"
       UNION ALL SELECT "runId"::text FROM "RunObservation"
       UNION ALL SELECT "runId"::text FROM "RunEnrichment"
+      UNION ALL SELECT "runId"::text FROM "FindingSnapshot"
+      UNION ALL SELECT "id"::text FROM "Finding"
+      UNION ALL SELECT "id"::text FROM "FindingDecision"
       UNION ALL SELECT "id" FROM "GitHubInstallation" LIMIT 1`.then(() => true, () => false),
     (async () => {
       const client = new Redis({ ...redisOptions(), lazyConnect: true });

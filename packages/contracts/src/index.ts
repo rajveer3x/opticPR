@@ -41,14 +41,40 @@ export const stageSchema = z.object({
   status: z.enum(['completed', 'skipped', 'partial', 'failed']), source: z.enum(['fixture', 'github']),
   version: z.string(), detail: z.string(),
 });
+export const evidenceSchema = z.object({
+  revision: shaSchema, path: z.string(), startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(), excerpt: z.string(), hunk: z.string(),
+});
+export const findingIdentitySchema = z.object({
+  kind: z.enum(['static', 'model', 'fixture']), class: z.string(), expression: z.string(), symbol: z.string(),
+});
+export const citationSchema = z.object({
+  kind: z.enum(['static', 'model', 'fixture']), ruleId: z.string(), evidence: evidenceSchema,
+});
 export const findingSchema = z.object({
   id: z.string(), source: z.enum(['fixture', 'github']), ruleId: z.string(),
   severity: z.enum(['high', 'medium', 'low']), title: z.string(), impact: z.string(), verification: z.string(),
-  evidence: z.object({
-    revision: shaSchema, path: z.string(), startLine: z.number().int().positive(),
-    endLine: z.number().int().positive(), excerpt: z.string(), hunk: z.string(),
-  }),
+  evidence: evidenceSchema,
+  identity: findingIdentitySchema.optional(), citations: z.array(citationSchema).optional(),
 });
+export const decisionInputSchema = z.object({
+  id: z.uuid(), runId: z.uuid(), findingId: z.uuid(), action: z.enum(['dismiss', 'reopen']),
+  actor: z.string().trim().min(1).max(200), reason: z.string().trim().min(1).max(2000),
+}).strict();
+export const findingDecisionSchema = decisionInputSchema.extend({ createdAt: z.string().datetime(), sequence: z.number().int().positive().optional() });
+export const findingHistoryEntrySchema = z.object({
+  findingId: z.uuid(), state: z.enum(['new', 'still_present', 'cleared_by_recheck', 'needs_verification']),
+  reason: z.string(), previous: z.object({ runId: z.uuid(), findingId: z.uuid() }).optional(),
+  observation: findingSchema.optional(), lastObservation: findingSchema, lastObservedRunId: z.uuid(),
+  lastObservedConfigurationDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  decision: findingDecisionSchema.optional(),
+});
+export const findingHistorySchema = z.object({
+  previousRunId: z.uuid().nullable(), findings: z.array(findingHistoryEntrySchema),
+});
+export type Finding = z.infer<typeof findingSchema>;
+export type FindingHistory = z.infer<typeof findingHistorySchema>;
+export type FindingHistoryEntry = z.infer<typeof findingHistoryEntrySchema>;
 export const reportSchema = z.object({
   schemaVersion: z.literal(1), runId: z.uuid(), logicalKey: z.string().regex(/^[a-f0-9]{64}$/),
   input: inputSchema, configuration: configSchema,
@@ -62,6 +88,9 @@ export const reportSchema = z.object({
   }),
   comparison: z.array(z.object({ path: z.string(), hunk: z.string(), status: z.string().optional(), previousPath: z.string().optional() })).optional(),
   findings: z.array(findingSchema),
+  history: findingHistorySchema.optional(),
+  // Full-file deterministic results, including matches outside added diff lines.
+  recheck: z.object({ completed: z.boolean(), rules: z.array(z.string()), files: z.array(z.string()), observations: z.array(findingSchema) }).optional(),
   enrichment: z.object({
     status: z.enum(['completed', 'partial', 'failed', 'skipped']), accepted: z.number().int().nonnegative(),
     rejected: z.number().int().nonnegative(), detail: z.string(),

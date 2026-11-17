@@ -1,4 +1,4 @@
-"""Rebuild the credential-free, two-commit Git bundle deterministically."""
+"""Rebuild the credential-free Git bundle and history scenarios deterministically."""
 from pathlib import Path
 import json
 import os
@@ -32,8 +32,25 @@ with tempfile.TemporaryDirectory(prefix="opticpr-fixture-build-") as directory:
     git("add", ".")
     git("-c", "commit.gpgsign=false", "commit", "-m", "Introduce final-item regression")
     head_sha = git("rev-parse", "HEAD")
-    git("bundle", "create", str(target / "repository.bundle"), "main")
+    scenarios = {"original": head_sha}
+    for name, contents, renamed in [
+        ("moved", "// Pagination helper\n\n" + head, False),
+        ("renamed", "// Pagination helper\n\n" + head, True),
+        ("fixed", base, False),
+        ("ambiguous", head.replace("  const end = start + pageSize - 1;\n  return items.slice(start, end);", ("  {\n    const end = start + pageSize - 1;\n    return items.slice(start, end);\n  }\n" * 2).rstrip()), False),
+    ]:
+        git("checkout", "--quiet", "-B", name, head_sha)
+        destination = path.with_name("pages.ts") if renamed else path
+        if renamed:
+            path.unlink()
+        destination.write_text(contents)
+        git("add", "-A")
+        git("-c", "commit.gpgsign=false", "commit", "-m", "History scenario: " + name)
+        scenarios[name] = git("rev-parse", "HEAD")
+    git("checkout", "--quiet", "main")
+    git("bundle", "create", str(target / "repository.bundle"), "--all")
     (target / "manifest.json").write_text(json.dumps({
         "source": "fixture", "repositoryId": "fixture/pagination", "pullRequestNumber": 1,
         "baseSha": base_sha, "headSha": head_sha,
     }, indent=2) + "\n")
+    (target / "history.json").write_text(json.dumps({"baseSha": base_sha, "scenarios": scenarios}, indent=2) + "\n")

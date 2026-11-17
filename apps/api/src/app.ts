@@ -46,6 +46,11 @@ export function createApp(db: PrismaClient, options: { webhookSecret?: string } 
       baseSha: run.baseSha, headSha: run.headSha, configurationDigest: run.configurationDigest,
       state: run.state, createdAt: run.createdAt, completedAt: run.completedAt,
       error: run.error, report: run.report === null ? null : reportSchema.parse(run.report),
+      decisions: run.report === null ? [] : await db.findingDecision.findMany({
+        where: { finding: { source: 'fixture', repositoryId: run.repositoryId, pullRequestNumber: run.pullRequestNumber },
+          findingId: { in: reportSchema.parse(run.report).history?.findings.map(item => item.findingId) ?? [] } },
+        orderBy: { sequence: 'asc' },
+      }),
     });
   });
   const handleError: ErrorRequestHandler = (error, _req, res, _next) => {

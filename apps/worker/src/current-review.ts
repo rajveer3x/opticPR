@@ -2,6 +2,7 @@ import { githubConfig, inputSchema, reportSchema, type GitHubScope, type Report 
 import { Prisma, type PrismaClient } from '@opticpr/database';
 import type { GitHubRepositoryClient } from '@opticpr/repository';
 import { lockInstallation, repositoryScope, runIdentity } from '@opticpr/runtime';
+import { snapshotFindingHistory } from './finding-history.js';
 
 type Tx = Prisma.TransactionClient;
 export const reviewTransactionOptions = { maxWait: 15000, timeout: 120000 };
@@ -72,8 +73,9 @@ export async function finalizeGitHubReview(db: PrismaClient, runId: string, rawR
   await db.$transaction(async tx => {
     await lockPullRequest(tx, scope, run.pullRequestNumber);
     const target = await observeLiveTarget(tx, scope, run.pullRequestNumber, client);
+    const completedReport = await snapshotFindingHistory(tx, report);
     const stored = await tx.reviewRun.updateMany({ where: { id: runId, grantVersion: scope.grantVersion, state: { in: ['queued', 'running', 'failed'] } }, data: {
-      report: report as Prisma.InputJsonValue, state: 'completed', completedAt: new Date(), error: null,
+      report: completedReport as Prisma.InputJsonValue, state: 'completed', completedAt: new Date(), error: null,
     } });
     if (!stored.count || !target || target.pr.desiredRunKey !== run.logicalKey || target.pr.baseSha !== run.baseSha || target.pr.headSha !== run.headSha) return;
     const advanced = await tx.pullRequest.updateMany({ where: {

@@ -5,6 +5,7 @@ import { Worker, queueName, redisOptions, logger, runIdentity, repositoryScope, 
 import { analyzeFixture, analyzeGitHubIntake } from './analyze.js';
 import { analyzeLocal, type AnalysisServices } from './local-analysis.js';
 import { finalizeGitHubReview } from './current-review.js';
+import { snapshotFindingHistory } from './finding-history.js';
 
 export function createWorker(db: PrismaClient, name = queueName, clients: GitHubClientFactory = githubClientsFromEnv(), services: AnalysisServices = {}) {
   const worker = new Worker(name, async job => {
@@ -29,15 +30,16 @@ export function createWorker(db: PrismaClient, name = queueName, clients: GitHub
         adapter = new GitHubRepositoryAdapter(scope, input.pullRequestNumber, githubClient, input);
       } else {
         if (configuration.adapter !== 'pagination-bundle-v1') throw new Error('Invalid fixture configuration');
-        adapter = await FixtureRepositoryAdapter.open();
+        adapter = await FixtureRepositoryAdapter.open(input);
       }
       const report = configuration.analyzer === 'local-analysis'
         ? await analyzeLocal(db, adapter, input, configuration, { runId, ...identity }, services)
         : await (input.source === 'fixture' ? analyzeFixture : analyzeGitHubIntake)(adapter, input, configuration, { runId, ...identity });
       if (githubClient) await finalizeGitHubReview(db, runId, report, githubClient);
       else await db.$transaction(async tx => {
+        const completedReport = await snapshotFindingHistory(tx, report);
         await tx.reviewRun.updateMany({ where: fence, data: {
-          report: report as Prisma.InputJsonValue, state: 'completed', completedAt: new Date(), error: null,
+          report: completedReport as Prisma.InputJsonValue, state: 'completed', completedAt: new Date(), error: null,
         } });
       });
       logger.info({ runId, durationMs: Date.now() - started }, 'Review report stored');

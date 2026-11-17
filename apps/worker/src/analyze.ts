@@ -1,5 +1,6 @@
 import { reportSchema, type AnalysisConfig, type Report, type ReviewInput } from '@opticpr/contracts';
 import type { RepositoryAdapter } from '@opticpr/repository';
+import { findingLocation } from './context.js';
 
 /** Pinned synthetic result, deliberately distinct from a Semgrep/model finding. */
 export async function analyzeFixture(
@@ -37,6 +38,7 @@ export async function analyzeFixture(
     },
     findings: [{
       id: 'fixture-pagination-end-exclusive', source: 'fixture', ruleId: configuration.ruleRevision,
+      identity: { kind: 'fixture', class: configuration.ruleRevision, ...await findingLocation(changed.path, head, line, line) },
       severity: 'high', title: 'Pagination drops the final item',
       impact: 'Array.slice excludes its end index. Subtracting one drops the last item of every full page; pageSize=1 returns an empty page.',
       verification: 'For items=[1,2,3], page=1 and pageSize=3, the base returns [1,2,3] and this head returns [1,2]. For pageSize=1, expect [1] but receive [].',

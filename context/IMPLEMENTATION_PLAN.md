@@ -1,6 +1,6 @@
 # Implementation plan
 
-**Current state:** features 01–03 are implemented and their acceptance checks passed locally using real PostgreSQL/Redis and mocked GitHub. A clean CI workflow is included; hosted CI has not run because this workspace is not a Git checkout. Features 04–08 and model benchmark results remain pending. The eight-week schedule is an estimate. Each feature spec defines the evidence for completing that slice.
+**Current state:** features 01–05 are implemented. Local acceptance checks use real PostgreSQL/Redis, pinned Semgrep and mocked GitHub; feature 04 benchmark results are recorded in `context/benchmarks/`. A clean CI workflow is included; hosted CI has not been run in this session. Features 06–08 remain pending. The eight-week schedule is an estimate. Each feature spec defines the evidence for completing that slice.
 
 | Order | Milestone | Dependency | Exit evidence |
 | --- | --- | --- | --- |
@@ -46,6 +46,21 @@ Validated locally with Node 26.5.0, pnpm 11.11.0, PostgreSQL and Redis:
 - `pnpm test:smoke` passed: compiled API/worker startup, real fixture replay, HTTP inspection and PostgreSQL outage/readiness behavior. The integration and smoke suites must run sequentially because each restarts shared Compose services.
 
 The [runbook](../README.md) documents Pull requests: write, marker recovery, lock behavior, publication states, rate-limit handling and `pnpm publication:retry <repository-id> <pr-number>`. Current GitHub reports still have unknown analysis coverage. Authenticated HTTP access and the browser dashboard remain feature 07; its pointer and shared reader are now available. Installation locks currently serialize operations across PRs in the same installation as well as within each PR.
+
+## Feature 05 evidence — November 17, 2026
+
+Completed reports now include PR-scoped stable finding IDs and immutable history snapshots. Comparisons use rule/class, normalized source tokens, enclosing named symbols and explicit rename mappings. Full-file static checkpoints retain observations outside added diff lines; prior affected files remain eligible for recheck even when a fix removes them from the PR diff. Equivalent deterministic rechecks can clear a finding; configuration changes, missing model-only observations, scanner gaps and ambiguous matches retain prior evidence as needing verification.
+
+The local operator CLI appends dismiss/reopen decisions with actor, reason, time and an ordered audit sequence. UUID idempotency keys prevent duplicate decisions. A dismissal carries only across an unambiguous match. Agreeing model/static sources retain both citations. Report completion, history, current-pointer promotion and publication intent share one transaction; snapshot/decision update and delete rules preserve stored evidence. Historical fixture HTTP responses include the frozen report and a separate decision audit. Authenticated maintainer HTTP actions remain feature 07.
+
+Validated locally with Node 26.5.0, pnpm 11.11.0, PostgreSQL, Redis and the digest-pinned Semgrep image:
+
+- Build, typecheck and 30 unit tests pass, including token normalization preserving string contents, one-to-many/many-to-one ambiguity, source grouping, decision restoration after an unambiguous recheck and repeated checks under a changed configuration.
+- All 42 integration tests pass, including the existing intake, publication, inference/checkpoint and fixture recovery suites. The compiled CLI/API smoke test passes, including PostgreSQL outage/readiness recovery. Both history migrations are applied locally; Prisma's schema/database diff reports no difference.
+- The six history integration tests use the normal queue/worker and real bundled commits. They verify original line-3 evidence, stable IDs after a header moves the condition to line 5 and after an explicit rename, a cleared fix with the prior citation retained, skipped-file/configuration/model-only uncertainty, and an ambiguous duplicate without inherited dismissal.
+- The trusted synthetic TypeScript pagination function is transpiled and executed for both original revisions: the base returns `[1,2,3]` and `[1]`; the regression returns `[1,2]` and `[]` for page sizes three and one.
+- Historical reports are inspected over HTTP after comparison. Re-finalization returns the frozen snapshot, SQL update attempts leave snapshots/decisions intact, and dismiss/reopen events preserve their append order. The publication rollback test also checks that failed finalization leaves no snapshot and retry creates exactly one.
+- The checked-in deterministic Git bundle preserves the original two commit SHAs and adds moved, renamed, fixed and ambiguous scenario refs. The runbook documents named fixture replay, inspection and `pnpm finding:decide`.
 
 ## Starting a work session
 

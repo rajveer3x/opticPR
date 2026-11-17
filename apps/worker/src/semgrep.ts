@@ -10,6 +10,7 @@ import { semgrepOutputSchema } from '@opticpr/contracts';
 const exec = promisify(execFile);
 export const semgrepImage = 'semgrep/semgrep:1.144.0@sha256:10301f060aacf84078f9704fb1ba3a321df4ac46b009fd29c1c66880d1db8e77';
 export const rulesPath = fileURLToPath(new URL('../../../config/semgrep/local-js-ts-v1.json', import.meta.url));
+export const staticRuleIds = ['opticpr.dynamic-eval', 'opticpr.disabled-tls', 'opticpr.slice-exclusive-boundary'];
 export interface SnapshotFile { path: string; source: string }
 export interface StaticMatch { path: string; ruleId: string; startLine: number; endLine: number; message: string; severity: 'high' | 'medium' | 'low' }
 export interface ScanResult { matches: StaticMatch[]; scanned: string[]; errors: number }

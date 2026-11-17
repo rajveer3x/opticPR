@@ -1,0 +1,10 @@
+{
+  "baseSha": "c92a9a02fefb3d11bb91c60bbf60e332df13b567",
+  "scenarios": {
+    "original": "7c7d890027156bff7ffe4fd89356ee5234e39f57",
+    "moved": "8e6617205c09951e6290633d4a0f83732d90d62b",
+    "renamed": "0118f77cc4466895d0c20acf3ad4ae88bfe1ccc9",
+    "fixed": "2d7946216df77794cb4688745aa60b0a0a51074d",
+    "ambiguous": "8dde5d203c680a411863c9a220ae01735d450276"
+  }
+}

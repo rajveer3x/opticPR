@@ -14,10 +14,17 @@ export function summaryBody(repositoryId: string, number: number, baseSha: strin
   else {
     lines.push(`Reviewed SHA: \`${report.input.headSha}\``, `Run: \`${report.runId}\``, '',
       `Coverage: **${report.coverage.status}** (${report.coverage.scope}).`,
-      `Analyzed ${report.coverage.analyzedFiles.length} of ${report.coverage.changedFiles.length} changed files.`, '');
+      `Analyzed ${report.coverage.analyzedFiles.length} files; ${report.coverage.changedFiles.length} changed files in the comparison.`, '');
     if (report.coverage.status !== 'complete') lines.push('Analysis is incomplete. An empty finding list does not indicate a clean review.', '');
     lines.push(`Findings: ${report.findings.length}.`, ...(report.enrichment ? [`Model enrichment: ${report.enrichment.status}; rejected candidates: ${report.enrichment.rejected}.`] : []));
     for (const finding of report.findings.slice(0, 20)) lines.push(`- ${escapeText(finding.title)} (${finding.severity}) — ${escapeText(finding.evidence.path)}:${finding.evidence.startLine}\n  ${escapeText(finding.impact)}\n  Verify: ${escapeText(finding.verification)}\n  Excerpt: ${escapeText(finding.evidence.excerpt)}`);
+    if (report.history) {
+      lines.push('', 'Finding history:');
+      for (const entry of report.history.findings.slice(0, 30)) {
+        const proof = entry.lastObservation.evidence;
+        lines.push(`- ${entry.state.replaceAll('_', ' ')}: ${escapeText(entry.lastObservation.title)} — ${escapeText(proof.path)}:${proof.startLine} at \`${proof.revision}\`${entry.decision ? `; ${entry.decision.action} by ${escapeText(entry.decision.actor)}: ${escapeText(entry.decision.reason)}` : ''}`);
+      }
+    }
   }
   return lines.join('\n');
 }

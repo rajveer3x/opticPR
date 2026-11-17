@@ -30,6 +30,7 @@ model ReviewRun {
   observations        RunObservation[]
   enrichments         RunEnrichment[]
   publications        ReviewPublication[]
+  findingSnapshot     FindingSnapshot?
   @@index([source, state])
 }
 
@@ -132,4 +133,38 @@ model RunEnrichment {
   candidate   Json
   createdAt   DateTime @default(now())
   @@id([runId, fingerprint])
+}
+
+// Created atomically with completed reports. Never updated by comparisons or decisions.
+model FindingSnapshot {
+  runId String @id @db.Uuid
+  run ReviewRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  report Json
+  createdAt DateTime @default(now())
+  decisions FindingDecision[]
+}
+
+model Finding {
+  id String @id @default(uuid()) @db.Uuid
+  source String
+  repositoryId String
+  pullRequestNumber Int
+  decisions FindingDecision[]
+  createdAt DateTime @default(now())
+  @@index([source, repositoryId, pullRequestNumber])
+}
+
+// Append-only reviewer audit; id is also the operator's idempotency key.
+model FindingDecision {
+  id String @id @db.Uuid
+  sequence Int @unique @default(autoincrement())
+  findingId String @db.Uuid
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  runId String @db.Uuid
+  snapshot FindingSnapshot @relation(fields: [runId], references: [runId], onDelete: NoAction, onUpdate: NoAction)
+  action String
+  actor String
+  reason String
+  createdAt DateTime @default(now())
+  @@index([findingId, createdAt])
 }

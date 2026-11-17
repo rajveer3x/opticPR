@@ -55,6 +55,35 @@ async function languageFor(path: string) {
   return languages.get(name)!;
 }
 const functionTypes = new Set(['function_declaration', 'function_expression', 'generator_function_declaration', 'generator_function', 'arrow_function', 'method_definition']);
+/** Token identity preserves literal contents and operators, ignoring layout/comments.
+ * Anonymous or invalid scopes deliberately do not yield a transferable identity. */
+export async function findingLocation(path: string, source: string, startLine: number, endLine: number): Promise<{ expression: string; symbol: string } | undefined> {
+  let parser: Parser | undefined;
+  let tree: ReturnType<Parser['parse']> = null;
+  try {
+    const language = await languageFor(path);
+    parser = new Parser(); parser.setLanguage(language); tree = parser.parse(source);
+    if (!tree || tree.rootNode.hasError) return;
+    const scopes = tree.rootNode.descendantsOfType([...functionTypes, 'class_declaration', 'class']).filter((node): node is Node =>
+      !!node && node.startPosition.row + 1 <= startLine && node.endPosition.row + 1 >= endLine);
+    const names: string[] = [];
+    for (const node of scopes) {
+      const name = node.childForFieldName('name') ?? (node.parent?.type === 'variable_declarator' ? node.parent.childForFieldName('name') : null);
+      if (!name) return;
+      names.push(name.text);
+    }
+    const tokens: string[][] = [];
+    const visit = (node: Node) => {
+      if (node.type === 'comment' || node.endPosition.row + 1 < startLine || node.startPosition.row + 1 > endLine) return;
+      if (!node.childCount) { tokens.push([node.type, node.text]); return; }
+      for (const child of node.children) if (child) visit(child);
+    };
+    visit(tree.rootNode);
+    if (!tokens.length) return;
+    return { expression: JSON.stringify(tokens), symbol: names.join('.') || '<module>' };
+  } catch { return; }
+  finally { tree?.delete(); parser?.delete(); }
+}
 export async function sourceContexts(revision: string, path: string, source: string, hunks: HeadHunk[], mode: 'diff-only' | 'function-context', maxChars = 6000): Promise<SourceContext[]> {
   const lines = source.split('\n');
   const contexts: SourceContext[] = [];

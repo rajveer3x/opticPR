@@ -1,4 +1,5 @@
-import { fixtureConfig, reportSchema } from '@opticpr/contracts';
+import { readFile } from 'node:fs/promises';
+import { fixtureConfig, githubConfig, inputSchema, reportSchema, shaSchema } from '@opticpr/contracts';
 import { PrismaClient } from '@opticpr/database';
 import { FixtureRepositoryAdapter } from '@opticpr/repository';
 import { createQueue, requireReady, scheduleRun, waitForReport } from '@opticpr/runtime';
@@ -11,8 +12,15 @@ try {
   if (!Number.isFinite(timeout) || timeout <= 0) throw new Error('REPLAY_TIMEOUT_MS must be positive');
   await requireReady(db);
   adapter = await FixtureRepositoryAdapter.open();
+  let input = await adapter.revisions();
+  const scenario = process.argv[2];
+  if (scenario) {
+    const history = JSON.parse(await readFile(new URL('../../../fixtures/pagination/history.json', import.meta.url), 'utf8'));
+    input = inputSchema.parse({ ...input, baseSha: history.baseSha, headSha: shaSchema.parse(history.scenarios[scenario]) });
+    await adapter.close(); adapter = await FixtureRepositoryAdapter.open(input);
+  }
   queue = createQueue();
-  const run = await scheduleRun(db, queue, await adapter.revisions(), fixtureConfig);
+  const run = await scheduleRun(db, queue, input, scenario ? { ...githubConfig, adapter: 'pagination-bundle-v1' } : fixtureConfig);
   const completed = await waitForReport(db, run.id, timeout);
   const report = reportSchema.parse(completed.report);
   console.log(JSON.stringify({ runId: completed.id, logicalKey: completed.logicalKey, state: completed.state, baseSha: report.input.baseSha, headSha: report.input.headSha }, null, 2));

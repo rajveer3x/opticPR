@@ -20,8 +20,10 @@ export interface RepositoryAdapter {
 export class FixtureRepositoryAdapter implements RepositoryAdapter {
   private constructor(private readonly directory: string, private readonly input: ReviewInput) {}
 
-  static async open(): Promise<FixtureRepositoryAdapter> {
-    const input = inputSchema.parse(JSON.parse(await readFile(join(fixtureDirectory, 'manifest.json'), 'utf8')));
+  static async open(revisions?: ReviewInput): Promise<FixtureRepositoryAdapter> {
+    const manifest = inputSchema.parse(JSON.parse(await readFile(join(fixtureDirectory, 'manifest.json'), 'utf8')));
+    const input = revisions ? inputSchema.parse(revisions) : manifest;
+    if (input.source !== 'fixture' || input.repositoryId !== manifest.repositoryId) throw new Error('Invalid fixture repository scope');
     const directory = await mkdtemp(join(tmpdir(), 'opticpr-fixture-'));
     try {
       await exec('git', ['clone', '--bare', '--quiet', join(fixtureDirectory, 'repository.bundle'), directory], { timeout: 5000 });
@@ -43,16 +45,22 @@ export class FixtureRepositoryAdapter implements RepositoryAdapter {
     for (const sha of [this.input.baseSha, this.input.headSha]) {
       await this.git(['cat-file', '-e', `${sha}^{commit}`]);
     }
-    const parent = (await this.git(['rev-parse', `${this.input.headSha}^`])).trim();
-    if (parent !== this.input.baseSha) throw new Error('Fixture head must directly descend from base');
+    await this.git(['merge-base', '--is-ancestor', this.input.baseSha, this.input.headSha]);
     return { ...this.input };
   }
 
   async changedFiles(baseSha: string, headSha: string): Promise<ChangedFile[]> {
     shaSchema.parse(baseSha); shaSchema.parse(headSha);
-    const paths = (await this.git(['diff', '--name-only', '-z', baseSha, headSha, '--'])).split('\0').filter(Boolean);
-    return Promise.all(paths.map(async path => ({
-      path, hunk: await this.git(['diff', '--no-ext-diff', '--no-textconv', '--unified=3', baseSha, headSha, '--', path]),
+    const fields = (await this.git(['diff', '--name-status', '-z', '-M', baseSha, headSha, '--'])).split('\0').filter(Boolean);
+    const files: Omit<ChangedFile, 'hunk'>[] = [];
+    while (fields.length) {
+      const code = fields.shift()!;
+      const first = fields.shift()!;
+      files.push(code.startsWith('R') ? { path: fields.shift()!, previousPath: first, status: 'renamed' } :
+        { path: first, status: code === 'D' ? 'removed' : code === 'A' ? 'added' : 'modified' });
+    }
+    return Promise.all(files.map(async file => ({ ...file,
+      hunk: await this.git(['diff', '--no-ext-diff', '--no-textconv', '-M', '--unified=3', baseSha, headSha, '--', ...(file.previousPath ? [file.previousPath] : []), file.path]),
     })));
   }
 
