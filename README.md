@@ -1,6 +1,6 @@
 # OpticPR
 
-OpticPR replays a synthetic pagination PR or accepts signed GitHub App events through a durable PostgreSQL outbox and a Redis/BullMQ worker. The fixture needs no GitHub or model credentials. The API and worker run on the host; Compose runs the two dependencies.
+OpticPR provides an authenticated review dashboard, replays a synthetic pagination PR, and accepts signed GitHub App events through a durable PostgreSQL outbox and a Redis/BullMQ worker. The fixture needs no GitHub or model credentials. The API and worker run on the host; Compose runs the two dependencies.
 
 ## Setup
 
@@ -21,14 +21,58 @@ pnpm db:migrate
 
 `pnpm build` builds compiled shared packages in dependency order before their consumers. Run it before tests or starting services. Prisma generation is explicit and does not require a running database. Migration uses the root `.env`. Compose pins PostgreSQL 16.14 and Redis 7.4.9 by image digest, binds only loopback ports **54329** and **63799**, and persists data in named volumes. Adjust the port mappings and matching URLs in `.env` together if necessary.
 
+## Authenticated review dashboard
+
+The React/Vite app in `apps/web` provides a repository list, paginated pull requests, and revision-specific review details. Its visual design uses a dark canvas, oversized typography, an original SVG orbital illustration, floating source panels, and interactive repository cards inspired by the visual direction of madetodisrupt.com. The header’s Motion control pauses decorative loops, transitions and pointer effects, remembers the preference locally, and follows the operating system’s reduced-motion setting. Navigation, evidence, and review data remain available with motion disabled. All graphics and fonts are local; the reference site supplies no runtime assets or dependencies. The API serves its production build with SPA fallback, so links such as `/runs/<id>?finding=<id>` work after refresh. Repository summaries read `latestRunId`; the latest target remains visible while analysis runs. Findings show source hunks, exact head lines, separate source citations, coverage and stage outcomes, previous observations, and append-only decision history.
+
+Configure the GitHub **App's** Client ID and Client Secret in `.env` (these are different from `GITHUB_APP_ID` and its private key):
+
+```dotenv
+DASHBOARD_ORIGIN=http://127.0.0.1:5173
+GITHUB_CLIENT_ID=<app-client-id>
+GITHUB_CLIENT_SECRET=<app-client-secret>
+GITHUB_APP_SLUG=<your-app-slug>
+SESSION_SECRET=<at-least-32-random-bytes>
+```
+
+Generate a session secret with `openssl rand -hex 32`. Register `http://127.0.0.1:5173/auth/github/callback` as the App's user authorization callback for local development. Use **127.0.0.1 consistently**, including in the browser. Enable user authorization for the GitHub App; repository Metadata: read is required, and Pull requests: write enables publication. Keep existing installation permissions and webhook setup described below. Install the App on selected repositories and deliver installation events to populate local grants.
+
+Run these in separate terminals after migration and build:
+
+```sh
+pnpm dev:api
+pnpm dev:worker
+pnpm dev:web
+```
+
+Open `http://127.0.0.1:5173`. Vite proxies `/api` and `/auth` to port 3000. If the API port changes, update the proxy in `apps/web/vite.config.ts`. The sign-in screen explains missing configuration; it does not create a demo identity. OAuth preserves safe repository/run deep links.
+
+For production, set `DASHBOARD_ORIGIN` to the public **HTTPS origin**, register its `/auth/github/callback`, build, and route that origin to the loopback API through a TLS reverse proxy. The API serves `apps/web/dist`; a separate Vite process is unnecessary. Give the worker the same `DASHBOARD_ORIGIN` so new GitHub summaries and inline comments contain review/evidence links. Existing stored inline bodies remain unchanged. Set `SESSION_SECRET` consistently across API instances; rotating it invalidates encrypted sessions. Session cookies are HttpOnly and SameSite=Lax, use Secure and the `__Host-` prefix on HTTPS, and expire no later than the GitHub token or eight hours. The server stores hashed opaque session IDs and AES-256-GCM encrypted GitHub user tokens. Expired sessions are removed on successful sign-in; expired/revoked credentials require sign-in again.
+
+Every repository/report request checks the live [GitHub user installation repository list](https://docs.github.com/en/rest/apps/installations#list-repositories-accessible-to-the-user-access-token) against active local installation grants. Members can read; GitHub maintain/admin permissions are required to retry, dismiss, or reopen. Push access alone does not grant these writes. Mutations require the configured Origin and the session's CSRF token. Child IDs resolve to their authorized repository and PR; inaccessible reports return 404. Cached private data is cleared on expired GitHub authorization, and access errors replace the current report.
+
+A review retry requires a reason and UUID request ID. It creates an immutable new run with the same revisions/configuration and a deterministic attempt number, plus an append-only audit record. The original report stays available and `latestRunId` stays on the completed summary until a current retry finishes. The existing dispatcher recovers committed attempts if Redis is unavailable. A stale attempt cannot advance the pointer. The selected revision stays in the URL after actions. Dismiss/reopen decisions require a confirmed observation and never rewrite analysis history.
+
+Keyboard users can use the native revision selector (arrows, Home, End), focusable source hunks, evidence links and maintainer forms. `/` focuses repository search. Status and severity always include text. Active selected/desired runs poll every four seconds and stop at terminal states or access errors; focus refresh discovers subsequent changes. Mobile layouts keep code scrolling inside its panel. Fonts are bundled locally.
+
+```sh
+pnpm test:dashboard          # Real PostgreSQL/Redis and worker, mocked GitHub
+pnpm exec playwright install chromium
+pnpm test:browser            # Browser flows, mobile layout, polling and axe accessibility
+```
+
+Browser tests use labeled synthetic test data and save screenshots under `test-results/`. They do not bypass production authentication. Live GitHub OAuth and real remote writes still require your App credentials and have not been exercised by the local acceptance suite.
+
 ## Replay and inspect
 
 Start these in separate terminals:
 
 ```sh
 pnpm dev:worker
-pnpm dev:api
+FIXTURE_INSPECTION_ENABLED=1 pnpm dev:api
 ```
+
+Leave `DASHBOARD_ORIGIN` unset for this credential-free fixture inspection mode. The main API disables fixture HTTP inspection whenever a dashboard origin is configured. The fixture inspector only returns fixture reports; live GitHub reports require a signed-in repository member.
 
 Then replay:
 
@@ -51,7 +95,7 @@ The report identifies these real Git commits from `fixtures/pagination/repositor
 
 With `[1,2,3]`, page 1 and page size 3, the base returns all three items and the head drops `3`. A page size of 1 returns an empty page. The finding cites head line 3, its exact source excerpt, the changed hunk, impact and a verification example. `python3 scripts/build-fixture.py` reproducibly regenerates the bundle and manifest. The adapter reads source by SHA and never executes reviewed code.
 
-The default fixture replay’s findings and stage provenance explicitly say `fixture`. Coverage is complete **only for the single fixture rule**. In that default replay, repository and deterministic-stub stages complete; Semgrep and model stages are explicitly skipped. Local JS/TS analysis is described below. Live GitHub intake and current-review publication are also described below; authentication and the browser UI are later slices. The inspection API enforces a loopback bind and exposes only fixture runs.
+The default fixture replay’s findings and stage provenance explicitly say `fixture`. Coverage is complete **only for the single fixture rule**. In that default replay, repository and deterministic-stub stages complete; Semgrep and model stages are explicitly skipped. Local JS/TS analysis is described below. Live GitHub intake and current-review publication are also described below; the authenticated dashboard is described above. The optional fixture inspection API enforces a loopback bind and exposes only fixture runs.
 
 ## Verification
 
@@ -75,7 +119,7 @@ docker compose start --wait postgres
 
 Readiness must return HTTP 503 with `postgresql: down` and `redis: up`. Replay must exit 1 and name PostgreSQL without a success result, even when a previous report already exists. Liveness at `/health/live` stays available.
 
-CI installs with the frozen lockfile, pulls the pinned Semgrep sandbox image, generates Prisma Client, builds the complete dependency graph without restored `dist` output, type-checks API and worker, migrates fresh Compose volumes, and runs all three verification commands. Only the pnpm package store is cached.
+CI installs with the frozen lockfile, pulls the pinned Semgrep sandbox image, generates Prisma Client, builds the complete dependency graph without restored `dist` output, type-checks API and worker, migrates fresh Compose volumes, and runs unit, integration, Playwright browser/accessibility, and smoke verification. Only the pnpm package store is cached.
 
 For a fresh-volume rehearsal that preserves existing Compose volumes, use a separate project name throughout a shell session (stop any existing OpticPR services first to free the ports):
 
@@ -111,7 +155,7 @@ Create a GitHub App with **Contents: read** and **Pull requests: write**, subscr
 - `GITHUB_APP_ID`: the GitHub App ID.
 - `GITHUB_APP_PRIVATE_KEY`: its PEM private key, quoted on one environment-file line with literal `\n` separators.
 
-Set the App webhook URL to `https://<your-TLS-proxy>/webhooks/github`. Forward to the loopback API and preserve the request body bytes and GitHub headers. The API keeps its loopback bind; fixture inspection remains local. No public report endpoint or OAuth login is added here. For an existing installation, redeliver its installation-created and subsequent selection-change events so local grants reflect the current selection before sending PR events.
+Set the App webhook URL to `https://<your-TLS-proxy>/webhooks/github`. Forward to the loopback API and preserve the request body bytes and GitHub headers. The API keeps its loopback bind; fixture inspection remains local. Live reports and OAuth use the authenticated dashboard configuration above. For an existing installation, redeliver its installation-created and subsequent selection-change events so local grants reflect the current selection before sending PR events.
 
 `POST /webhooks/github` verifies `X-Hub-Signature-256` with HMAC-SHA256 over raw bytes before parsing. Missing or incorrect signatures return 401 and write nothing. Missing configuration or durable storage failure returns 503; GitHub deliveries can be redelivered after recovery. Malformed signed payloads return 400. A first verified delivery returns 202 only after its receipt and eligible outbox intent commit together. A matching duplicate returns 200; reuse of a delivery ID for different bytes or event type returns 409. Raw bodies are limited to 25 MB and compressed requests are rejected.
 
@@ -123,14 +167,14 @@ The dispatcher polls once per second. It claims pending outbox rows with 60-seco
 
 Removal or uninstall atomically revokes local access and cancels pending and outstanding work. Reconciliation removes queued cancelled jobs. An in-flight request may finish, but finalization rechecks access under the same installation lock and cannot commit its report. Re-selection creates a fresh grant version so old jobs remain fenced. Completed historical reports stay stored. Suspension disables installation access and cancels outstanding work while retaining the selection for unsuspension.
 
-New GitHub runs use the local JS/TS pipeline described below. Reports retain comparison metadata and patches; excluded secrets, binaries and generated source have their patches omitted. Historical intake-only configurations remain readable with unknown coverage. Empty findings never establish repository-wide correctness. GitHub comparisons at the REST API’s 300-file boundary fail explicitly rather than recording potentially truncated coverage; files without a patch retain an empty hunk. Live runs can be inspected through Prisma/operator tooling, while `/api/runs/:id` continues to expose fixtures only until repository authorization exists.
+New GitHub runs use the local JS/TS pipeline described below. Reports retain comparison metadata and patches; excluded secrets, binaries and generated source have their patches omitted. Historical intake-only configurations remain readable with unknown coverage. Empty findings never establish repository-wide correctness. GitHub comparisons at the REST API’s 300-file boundary fail explicitly rather than recording potentially truncated coverage; files without a patch retain an empty hunk. Signed-in repository members can inspect live runs through `/api/runs/:id` and the dashboard; local operators can also use Prisma tooling.
 
 The local acceptance run on 2026-11-17 measured **28.6 ms acknowledgment p95** for ten simultaneous deliveries with one delivery ID, producing one receipt, outbox entry and logical run. This is a local ten-request measurement; the integration test prints a fresh measurement each time. GitHub API behavior is tested with mocks; no real App credentials are required by the suite.
 
 
 ## Current review publication
 
-The worker finalizes each GitHub report after reading the live head and base again. In one PostgreSQL transaction it stores the completed report, conditionally advances `PullRequest.latestRunId` for the desired logical key and both SHAs, and records `ReviewPublication` intent. A stale result stays in run history. `readCurrentReview` in `apps/worker/src/current-review.ts` reads the selected report through that pointer for the future authenticated dashboard. Live reports remain unavailable through the unauthenticated fixture API.
+The worker finalizes each GitHub report after reading the live head and base again. In one PostgreSQL transaction it stores the completed report, conditionally advances `PullRequest.latestRunId` for the desired logical key and both SHAs, and records `ReviewPublication` intent. A stale result stays in run history. `readCurrentReview` in `apps/worker/src/current-review.ts` reads the selected report through that pointer alongside the authenticated dashboard's pointer-based reader. Live reports remain unavailable through the unauthenticated fixture API.
 
 The publisher polls durable intent once per second. PostgreSQL transaction advisory locks serialize dispatch, promotion and remote publication per PR across processes. The installation lock is also held during these operations so grant changes and finalization cannot interleave; this currently serializes publication across PRs in one installation. There is no Redis publication job or expiring publication lease. A process/connection failure releases its database locks, and pending intent survives a restart.
 
@@ -146,7 +190,7 @@ Inspect `ReviewPublication` and its related `ReviewRun` with local Prisma/operat
 pnpm publication:retry <github-repository-id> <pr-number>
 ```
 
-The running worker publishes it on the next poll. This local operator command rechecks installation/repository access; an authenticated maintainer retry endpoint belongs to feature 07. Re-observing the same revision through another webhook does not reset an exhausted retry budget. Rebuild after pulling code changes and apply migrations with `pnpm db:migrate` before starting services.
+The running worker publishes it on the next poll. This local operator command rechecks installation/repository access; the dashboard's maintainer retry creates a fresh analysis attempt, while this CLI retries publication only. Re-observing the same revision through another webhook does not reset an exhausted retry budget. Rebuild after pulling code changes and apply migrations with `pnpm db:migrate` before starting services.
 
 ## Verified inline comments
 
@@ -158,7 +202,7 @@ Inline comments use GitHub's [create review endpoint](https://docs.github.com/en
 
 Recovery paginates [review comments](https://docs.github.com/en/rest/pulls/comments#list-review-comments-on-a-pull-request) and requires the marker, original commit, path, original line and right side to match. Because this endpoint omits `performed_via_github_app`, ownership is verified against the authenticated App's reserved bot login, resolved through `GET /app` using App authentication. User copies, other apps, replies and other revisions cannot claim an intent. A successful create whose response times out is recovered before another create. If a review ID was returned but its comment is not yet visible, retries wait for confirmation. Prior revisions' reports and threads remain intact; a finding on another reviewed comparison has a separate publication identity.
 
-`InlinePublication.state` is `pending`, `published`, `skipped` (with a reason), or `superseded` when the desired comparison moves before posting. Transient failures use the PR publication attempt budget and backoff. Use the existing `pnpm publication:retry <github-repository-id> <pr-number>` command after recovery. Inspect per-run intents through Prisma/operator tooling; authenticated dashboard access remains feature 07. The tests use real PostgreSQL/Redis and mocked GitHub; no live GitHub review is posted by the acceptance suite.
+`InlinePublication.state` is `pending`, `published`, `skipped` (with a reason), or `superseded` when the desired comparison moves before posting. Transient failures use the PR publication attempt budget and backoff. Use the existing `pnpm publication:retry <github-repository-id> <pr-number>` command after recovery. Inspect per-run intents through Prisma/operator tooling; revision-bound dashboard evidence links are added when `DASHBOARD_ORIGIN` is configured. The tests use real PostgreSQL/Redis and mocked GitHub; no live GitHub review is posted by the acceptance suite.
 
 ## Local analysis and function context
 
@@ -216,13 +260,13 @@ pnpm run:inspect <fixed-run-id>
 
 Keep each printed run ID. The original condition is at line 3, the header moves it to line 5, and the fixed snapshot records the successful recheck with the line-5 evidence still available. Named scenarios use local analysis; replay without arguments retains the original deterministic fixture stub and its distinct configuration. Ollama is optional for retaining the static result; unavailable enrichment is labeled partial. Regenerate the bundle and scenario SHAs with `python3 scripts/build-fixture.py`.
 
-Until authenticated maintainer actions arrive in feature 07, append decisions through the local operator CLI using an ID from `report.history.findings`:
+Maintainers can append decisions in the dashboard, and local operators can use the CLI using an ID from `report.history.findings`:
 
 ```sh
 pnpm finding:decide <run-id> <finding-id> dismiss 'raj' 'Accepted for this synthetic example'
 pnpm finding:decide <run-id> <finding-id> reopen 'raj' 'Needs another review'
 ```
 
-Actor and reason are required; the selected run must contain a confirmed observation in that PR. Each command returns a decision UUID, append sequence and time. Supply the returned UUID as the optional final argument when retrying an uncertain response; reuse with different content fails. Decisions never modify past reports. The latest decision carries to the next unambiguous observation, and an uncertain match carries none. Fixture inspection returns the append-only decision audit separately from the frozen report. GitHub summaries include finding-history outcomes and any decision carried into that snapshot; authenticated GitHub report/decision HTTP access remains feature 07.
+Actor and reason are required; the selected run must contain a confirmed observation in that PR. Each command returns a decision UUID, append sequence and time. Supply the returned UUID as the optional final argument when retrying an uncertain response; reuse with different content fails. Decisions never modify past reports. The latest decision carries to the next unambiguous observation, and an uncertain match carries none. Fixture inspection returns the append-only decision audit separately from the frozen report. GitHub summaries include finding-history outcomes and any decision carried into that snapshot; authenticated GitHub report/decision HTTP access is described in the dashboard section.
 
 `pnpm test` covers normalization, matching, source grouping and conservative clearing. `pnpm test:integration` exercises the real Git commits and pinned Semgrep through the normal BullMQ worker, checks historical snapshots over HTTP, and executes only the trusted synthetic pagination function for the boundary assertions. Inference is injected in these tests, so no model or GitHub credentials are needed.

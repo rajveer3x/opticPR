@@ -1,3 +1,4 @@
+import { dashboardRunUrl } from '@opticpr/runtime';
 import type { Finding, Report } from '@opticpr/contracts';
 import type { Prisma } from '@opticpr/database';
 import type { ChangedFile, GitHubPublicationClient, ReviewComment } from '@opticpr/repository';
@@ -52,7 +53,8 @@ function safe(text: string) { return text.slice(0, 2000).replace(/[\\`*_{}[\]()<
 export function inlineBody(report: Report, finding: Finding) {
   return [inlineMarker(report, finding.id), `**${safe(finding.title)}** (${finding.severity})`, '', safe(finding.impact), '',
     `Verify: ${safe(finding.verification)}`, '', `Reviewed SHA: \`${report.input.headSha}\``, `Base: \`${report.input.baseSha}\``,
-    `Run: \`${report.runId}\``, `Finding: \`${finding.id}\``].join('\n');
+    `Run: \`${report.runId}\``, `Finding: \`${finding.id}\``,
+    ...(dashboardRunUrl(report.runId) ? ['', `[Inspect evidence](${dashboardRunUrl(report.runId)}?finding=${encodeURIComponent(finding.id)})`] : [])].join('\n');
 }
 
 /** Commit with the frozen report, before any GitHub request can publish it. */

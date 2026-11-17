@@ -7,7 +7,7 @@ export class IneligiblePullRequestError extends Error {
   constructor() { super('Pull request is closed or draft'); }
 }
 export interface GitHubRepositoryClient {
-  pullRequest(number: number): Promise<{ number: number; state: string; draft: boolean; baseSha: string; headSha: string; repositoryId: string }>;
+  pullRequest(number: number): Promise<{ number: number; state: string; draft: boolean; baseSha: string; headSha: string; repositoryId: string; title?: string }>;
   compare(baseSha: string, headSha: string): Promise<ChangedFile[]>;
   file(sha: string, path: string): Promise<string>;
 }
@@ -63,7 +63,7 @@ export function githubClientFactory(credentials: { appId: string; privateKey: st
         const { data } = await (await session()).rest.pulls.get({ ...target, pull_number: number });
         const repository = githubRepositorySchema.parse(data.base.repo);
         if (repository.id !== scope.repositoryId || data.number !== number) throw new Error('GitHub repository scope mismatch');
-        return { number, state: data.state, draft: data.draft ?? false, baseSha: shaSchema.parse(data.base.sha), headSha: shaSchema.parse(data.head.sha), repositoryId: repository.id };
+        return { number, title: data.title, state: data.state, draft: data.draft ?? false, baseSha: shaSchema.parse(data.base.sha), headSha: shaSchema.parse(data.head.sha), repositoryId: repository.id };
       },
       async compare(baseSha, headSha) {
         shaSchema.parse(baseSha); shaSchema.parse(headSha);

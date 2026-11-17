@@ -20,7 +20,7 @@ export function createWorker(db: PrismaClient, name = queueName, clients: GitHub
     try {
       const input = inputSchema.parse(run);
       const configuration = configSchema.parse(run.configuration);
-      const identity = runIdentity(input, configuration);
+      const identity = runIdentity(input, configuration, run.attempt);
       if (identity.logicalKey !== run.logicalKey || identity.configurationDigest !== run.configurationDigest) throw new Error('Stored run identity failed validation');
       if (input.source === 'github') {
         if (configuration.adapter !== 'github-rest-v1' || !run.installationId || !run.grantVersion) throw new Error('Invalid GitHub run scope');

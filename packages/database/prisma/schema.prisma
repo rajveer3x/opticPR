@@ -8,6 +8,7 @@ datasource db {
 model ReviewRun {
   id                  String   @id @default(uuid()) @db.Uuid
   logicalKey          String   @unique @db.VarChar(64)
+  attempt             Int      @default(0)
   installationId      String?
   grantVersion        String? @db.Uuid
   source              String
@@ -32,12 +33,15 @@ model ReviewRun {
   publications        ReviewPublication[]
   findingSnapshot     FindingSnapshot?
   inlinePublications  InlinePublication[]
+  retriesRequested    ReviewRetry[] @relation("RetrySource")
+  retryAudit          ReviewRetry? @relation("RetryResult")
   @@index([source, state])
 }
 
 model PullRequest {
   repositoryId      String
   number            Int
+  title             String @default("Pull request")
   desiredRunKey     String @db.VarChar(64)
   baseSha           String @db.VarChar(40)
   headSha           String @db.VarChar(40)
@@ -188,4 +192,29 @@ model FindingDecision {
   reason String
   createdAt DateTime @default(now())
   @@index([findingId, createdAt])
+}
+
+// Opaque session IDs are hashed; GitHub user credentials are encrypted at rest.
+model DashboardSession {
+  id String @id @db.VarChar(64)
+  userId String
+  login String
+  credential String
+  csrfToken String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
+}
+
+// An explicit retry gets a fresh immutable run, with the original configuration.
+model ReviewRetry {
+  id String @id @db.Uuid
+  sourceRunId String @db.Uuid
+  sourceRun ReviewRun @relation("RetrySource", fields: [sourceRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  runId String @unique @db.Uuid
+  run ReviewRun @relation("RetryResult", fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actor String
+  reason String
+  createdAt DateTime @default(now())
+  @@index([sourceRunId])
 }

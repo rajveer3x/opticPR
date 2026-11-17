@@ -43,7 +43,12 @@ export async function observeLiveTarget(tx: Tx, scope: GitHubScope, number: numb
   }
   const input = inputSchema.parse({ source: 'github', repositoryId: scope.repositoryId, pullRequestNumber: number, baseSha: live.baseSha, headSha: live.headSha });
   const identity = runIdentity(input, githubConfig);
-  let run = await tx.reviewRun.upsert({ where: { logicalKey: identity.logicalKey },
+  const previous = await tx.pullRequest.findUnique({ where });
+  // Preserve a maintainer-requested attempt while this exact comparison is current.
+  const desired = previous ? await tx.reviewRun.findUnique({ where: { logicalKey: previous.desiredRunKey } }) : null;
+  const selected = desired && desired.baseSha === input.baseSha && desired.headSha === input.headSha &&
+    desired.configurationDigest === identity.configurationDigest ? desired : null;
+  let run = selected ?? await tx.reviewRun.upsert({ where: { logicalKey: identity.logicalKey },
     create: { ...input, ...identity, configuration: githubConfig, installationId: scope.installationId, grantVersion: scope.grantVersion }, update: {},
   });
   if (run.state === 'cancelled' || run.grantVersion !== scope.grantVersion) {
@@ -52,11 +57,10 @@ export async function observeLiveTarget(tx: Tx, scope: GitHubScope, number: numb
       installationId: scope.installationId, grantVersion: scope.grantVersion,
     } });
   }
-  const previous = await tx.pullRequest.findUnique({ where });
   const completed = run.state === 'completed' && run.report !== null;
   const pr = await tx.pullRequest.upsert({ where,
-    create: { repositoryId: scope.repositoryId, number, desiredRunKey: run.logicalKey, baseSha: run.baseSha, headSha: run.headSha, ...(completed ? { latestRunId: run.id } : {}) },
-    update: { desiredRunKey: run.logicalKey, baseSha: run.baseSha, headSha: run.headSha, eligible: true, ...(completed ? { latestRunId: run.id } : {}) },
+    create: { repositoryId: scope.repositoryId, number, title: live.title ?? 'Pull request', desiredRunKey: run.logicalKey, baseSha: run.baseSha, headSha: run.headSha, ...(completed ? { latestRunId: run.id } : {}) },
+    update: { ...(live.title ? { title: live.title } : {}), desiredRunKey: run.logicalKey, baseSha: run.baseSha, headSha: run.headSha, eligible: true, ...(completed ? { latestRunId: run.id } : {}) },
   });
   if (previous?.desiredRunKey !== run.logicalKey) {
     await tx.inlinePublication.updateMany({ where: { state: 'pending', runId: { not: run.id },

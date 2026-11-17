@@ -4,7 +4,7 @@
 
 A repository belongs to an installation. A PR belongs to a repository and owns the desired run key, current target SHAs, latestRunId and persistent GitHub comment ID. A ReviewRun owns its report, exact inputs, configuration digest and stage coverage. A stable PR-scoped finding links per-run observations. Each observation owns its source, revision, path, lines and excerpt. Append reviewer decisions with actor, reason and time.
 
-Use a unique delivery ID for ingress and a deterministic key derived from repo ID, PR number, baseSha, headSha and analysis configuration digest for queue jobs and runs. Record verified receipt and outbox intent together. Recover unsent work and expired worker leases from PostgreSQL.
+Use a unique delivery ID for ingress and a deterministic key derived from repo ID, PR number, baseSha, headSha and analysis configuration digest for queue jobs and initial runs. Explicit authenticated retries add a monotonic attempt number to that deterministic identity, preserve the original configuration and report, and append a reviewer audit. Record verified receipt and outbox intent together. Recover unsent work and expired worker leases from PostgreSQL.
 
 Commit Semgrep matches and scan completion together before invoking Ollama. Finalize the report, conditionally advance latestRunId and create publication intent in one Prisma transaction. Guard the pointer write against the desired key. A stale result remains in history. The dashboard reads the summary through the pointer.
 
@@ -16,6 +16,9 @@ Commit per-run/finding `InlinePublication` intents with current report completio
 
 | Operation | Authority | Result |
 | --- | --- | --- |
+| GET /auth/github and callback | Verified OAuth state | GitHub App user authorization and opaque session |
+| GET /api/session | Signed-in user | User identity and CSRF token |
+| POST /api/logout | Signed-in user + CSRF | Revoke the current server session |
 | POST /webhooks/github | Valid HMAC on raw bytes | Durable receipt or confirmed duplicate |
 | GET /api/repos | Signed-in user | Accessible installed repositories |
 | GET /api/repos/:id/prs | Repo member | Paginated PRs and latest reviewed revision |
@@ -24,3 +27,5 @@ Commit per-run/finding `InlinePublication` intents with current report completio
 | POST /api/findings/:id/decisions | Maintainer | Validated dismiss or reopen decision |
 
 Verify OAuth state. Use HttpOnly, Secure, SameSite session cookies, CSRF protection on mutations and short-lived installation tokens. Resolve child IDs back to their repository before authorization. Logs include run IDs and durations. Keep credentials and raw diffs out of logs.
+
+Dashboard read responses are defined in `packages/contracts`: repository role/publication capability, paginated PRs, pointer-selected summaries, desired run, selected run report, revision history, decisions, and retry audit. Read reports stay immutable; current reviewer decisions are returned separately. Retry/decision bodies accept a UUID request ID and non-empty reason, and the server supplies actor identity. The API serves the Vite production assets with SPA fallback. Only explicit local fixture inspection may omit a session; the main server disables it when `DASHBOARD_ORIGIN` is configured.

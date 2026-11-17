@@ -24,6 +24,8 @@ jobs:
       - run: pnpm analysis:scanner:pull
       - run: pnpm db:migrate
       - run: pnpm test:integration
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:browser
       - run: pnpm test:smoke
       - if: failure()
         run: docker compose logs --no-color

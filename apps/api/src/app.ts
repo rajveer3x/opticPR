@@ -1,12 +1,19 @@
+import { dashboardRouter } from './dashboard.js';
+import { DashboardError, dashboardConfigFromEnv, type DashboardConfig, type DashboardGitHub } from './dashboard-auth.js';
 import express, { type ErrorRequestHandler, type Express } from 'express';
 import { queueJobSchema, reportSchema } from '@opticpr/contracts';
 import type { PrismaClient } from '@opticpr/database';
 import { verifySignature, receiveGitHubEvent, InvalidWebhookError, DeliveryConflictError } from './github.js';
 import { logger, readiness } from '@opticpr/runtime';
 
-export function createApp(db: PrismaClient, options: { webhookSecret?: string } = {}): Express {
+export function createApp(db: PrismaClient, options: { webhookSecret?: string; dashboard?: DashboardConfig; github?: DashboardGitHub; allowFixtureInspection?: boolean; webDirectory?: string } = {}): Express {
   const app = express();
   app.disable('x-powered-by');
+  app.use((_req, res, next) => {
+    res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY',
+      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" });
+    next();
+  });
   app.post('/webhooks/github', express.raw({ type: () => true, inflate: false, limit: '25mb' }), async (req, res) => {
     const started = Date.now();
     const secret = options.webhookSecret ?? process.env.GITHUB_WEBHOOK_SECRET;
@@ -35,12 +42,14 @@ export function createApp(db: PrismaClient, options: { webhookSecret?: string } 
     const status = await readiness(db);
     res.status(status.ready ? 200 : 503).json(status);
   });
-  // Local fixture inspection only. Repository authorization belongs to slice 07.
-  app.get('/api/runs/:id', async (req, res) => {
+  // Explicit local fixture inspection; main disables it when dashboard access is configured.
+  app.get('/api/runs/:id', async (req, res, next) => {
+    if (!options.allowFixtureInspection) { next(); return; }
     const parsed = queueJobSchema.safeParse({ runId: req.params.id });
     if (!parsed.success) { res.status(400).json({ error: 'Invalid run ID' }); return; }
     const run = await db.reviewRun.findUnique({ where: { id: parsed.data.runId } });
-    if (!run || run.source !== 'fixture') { res.status(404).json({ error: 'Run not found' }); return; }
+    if (!run) { res.status(404).json({ error: 'Run not found' }); return; }
+    if (run.source !== 'fixture') { next(); return; }
     res.json({
       id: run.id, logicalKey: run.logicalKey, source: run.source,
       baseSha: run.baseSha, headSha: run.headSha, configurationDigest: run.configurationDigest,
@@ -53,7 +62,17 @@ export function createApp(db: PrismaClient, options: { webhookSecret?: string } 
       }),
     });
   });
+  const dashboard = options.dashboard ?? dashboardConfigFromEnv();
+  app.use(dashboardRouter(db, dashboard, options.github));
+  app.use('/api', (_req, res) => { res.status(404).json({ error: 'Endpoint not found' }); });
+  if (options.webDirectory) {
+    app.use(express.static(options.webDirectory));
+    app.get('/{*path}', (_req, res) => { res.sendFile('index.html', { root: options.webDirectory }); });
+  }
   const handleError: ErrorRequestHandler = (error, _req, res, _next) => {
+    if (error instanceof DashboardError) { res.status(error.status).json({ error: error.message }); return; }
+    if (error instanceof SyntaxError && 'body' in error) { res.status(400).json({ error: 'Invalid JSON body' }); return; }
+    if (error instanceof Error && /Decision requires|idempotency key conflict/.test(error.message)) { res.status(409).json({ error: error.message }); return; }
     if (error.type === 'entity.too.large') { res.status(413).json({ error: 'Webhook body too large' }); return; }
     if (error.status === 415) { res.status(415).json({ error: 'Unsupported body encoding' }); return; }
     logger.error('Report request failed');

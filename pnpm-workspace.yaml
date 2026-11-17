@@ -9,3 +9,5 @@ allowBuilds:
   prisma: true
   tree-sitter-javascript: false
   tree-sitter-typescript: false
+minimumReleaseAgeExclude:
+  - lucide-react@1.74.0

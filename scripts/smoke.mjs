@@ -5,7 +5,7 @@ import { fixtureConfig, reportSchema } from '../packages/contracts/dist/index.js
 import { FixtureRepositoryAdapter } from '../packages/repository/dist/index.js';
 
 const exec = promisify(execFile);
-const env = { ...process.env, PORT: process.env.SMOKE_PORT ?? '31997', HOST: '127.0.0.1' };
+const env = { ...process.env, FIXTURE_INSPECTION_ENABLED: '1', PORT: process.env.SMOKE_PORT ?? '31997', HOST: '127.0.0.1' };
 const origin = `http://127.0.0.1:${env.PORT}`;
 const children = [];
 function start(entry) {

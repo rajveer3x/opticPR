@@ -42,7 +42,7 @@ beforeAll(async () => {
     },
   });
   await worker.waitUntilReady();
-  server = createApp(db).listen(0, '127.0.0.1'); await new Promise<void>(resolve => server.once('listening', resolve));
+  server = createApp(db, { allowFixtureInspection: true }).listen(0, '127.0.0.1'); await new Promise<void>(resolve => server.once('listening', resolve));
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('No HTTP address');
   origin = `http://127.0.0.1:${address.port}`;
 }, 30000);

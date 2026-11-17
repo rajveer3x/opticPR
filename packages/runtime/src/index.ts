@@ -42,7 +42,9 @@ export async function readiness(db: PrismaClient) {
       UNION ALL SELECT "runId"::text FROM "FindingSnapshot"
       UNION ALL SELECT "id"::text FROM "Finding"
       UNION ALL SELECT "id"::text FROM "FindingDecision"
-      UNION ALL SELECT "id" FROM "GitHubInstallation" LIMIT 1`.then(() => true, () => false),
+      UNION ALL SELECT "id" FROM "GitHubInstallation"
+      UNION ALL SELECT "id" FROM "DashboardSession"
+      UNION ALL SELECT "id"::text FROM "ReviewRetry" LIMIT 1`.then(() => true, () => false),
     (async () => {
       const client = new Redis({ ...redisOptions(), lazyConnect: true });
       client.on('error', () => {});
@@ -73,11 +75,12 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 export function digest(value: unknown): string { return createHash('sha256').update(canonical(value)).digest('hex'); }
-export function runIdentity(rawInput: ReviewInput, rawConfig: AnalysisConfig) {
+export function runIdentity(rawInput: ReviewInput, rawConfig: AnalysisConfig, attempt = 0) {
   const input = inputSchema.parse(rawInput);
   const configuration = configSchema.parse(rawConfig);
   const configurationDigest = digest(configuration);
-  return { logicalKey: digest({ ...input, configurationDigest }), configurationDigest };
+  if (!Number.isSafeInteger(attempt) || attempt < 0) throw new Error('Invalid review attempt');
+  return { logicalKey: digest({ ...input, configurationDigest, ...(attempt ? { attempt } : {}) }), configurationDigest };
 }
 
 /** Persist first. Replaying repairs a queue restart or a crash before enqueue. */
@@ -131,4 +134,20 @@ export async function enqueueRun(queue: Queue, run: { id: string; logicalKey: st
     jobId: run.logicalKey, attempts: 3, backoff: { type: 'exponential', delay: 500 },
     removeOnComplete: true, removeOnFail: false,
   });
+}
+
+export { appendFindingDecision } from './finding-decisions.js';
+
+/** Public links contain only immutable IDs, never credentials or source content. */
+export function dashboardRunUrl(runId: string, findingId?: string, origin = process.env.DASHBOARD_ORIGIN): string | undefined {
+  if (!origin) return;
+  queueLinkId(runId); if (findingId) queueLinkId(findingId);
+  const url = new URL(origin);
+  if (url.origin !== origin || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)))) throw new Error('Invalid DASHBOARD_ORIGIN');
+  url.pathname = `/runs/${runId}`;
+  if (findingId) url.searchParams.set('finding', findingId);
+  return url.href;
+}
+function queueLinkId(id: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw new Error('Invalid dashboard link ID');
 }

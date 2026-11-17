@@ -159,3 +159,39 @@ export const semgrepOutputSchema = z.object({
   errors: z.array(z.unknown()),
   paths: z.object({ scanned: z.array(z.string()) }),
 });
+
+// Dashboard responses are deliberately separate from immutable analysis snapshots.
+export const dashboardDecisionSchema = z.object({
+  id: z.uuid(), runId: z.uuid(), action: z.enum(['dismiss', 'reopen']), reason: z.string().trim().min(1).max(2000),
+}).strict();
+export const dashboardRetrySchema = z.object({ id: z.uuid(), reason: z.string().trim().min(1).max(2000) }).strict();
+export const sessionSchema = z.object({ user: z.object({ id: z.string(), login: z.string() }), csrfToken: z.string() });
+export const dashboardRepositorySchema = z.object({
+  id: z.string(), owner: z.string(), name: z.string(), installationId: z.string(),
+  role: z.enum(['member', 'maintainer']), canPublish: z.boolean(), lastEventAt: z.string().nullable(),
+});
+export const runSummarySchema = z.object({
+  id: z.uuid(), baseSha: shaSchema, headSha: shaSchema, state: z.string(), attempt: z.number().int().nonnegative(),
+  createdAt: z.string(), completedAt: z.string().nullable(), coverage: z.enum(['complete', 'partial', 'unknown']).nullable(),
+  findings: z.number().int().nonnegative(),
+});
+export const pullRequestSummarySchema = z.object({
+  number: z.number(), title: z.string(), baseSha: shaSchema, headSha: shaSchema, eligible: z.boolean(),
+  latestRunId: z.uuid().nullable(), latestRun: runSummarySchema.nullable(), desiredRun: runSummarySchema.nullable(),
+  publicationState: z.string().nullable(), updatedAt: z.string(),
+});
+export const repositoryListSchema = z.object({ repositories: z.array(dashboardRepositorySchema), installationUrl: z.string().url().nullable() });
+export const pullRequestListSchema = z.object({
+  repository: dashboardRepositorySchema, items: z.array(pullRequestSummarySchema), page: z.number(), pageSize: z.number(), total: z.number(), hasActive: z.boolean(),
+});
+export const runDetailSchema = runSummarySchema.extend({
+  repository: dashboardRepositorySchema, pullRequest: pullRequestSummarySchema.nullable(),
+  configurationDigest: z.string(), error: z.string().nullable(), report: reportSchema.nullable(),
+  revisions: z.array(runSummarySchema), decisions: z.array(findingDecisionSchema),
+  retries: z.array(z.object({ id: z.uuid(), sourceRunId: z.uuid(), runId: z.uuid(), actor: z.string(), reason: z.string(), createdAt: z.string() })),
+});
+export type DashboardSession = z.infer<typeof sessionSchema>;
+export type DashboardRepository = z.infer<typeof dashboardRepositorySchema>;
+export type RunSummary = z.infer<typeof runSummarySchema>;
+export type PullRequestSummary = z.infer<typeof pullRequestSummarySchema>;
+export type RunDetail = z.infer<typeof runDetailSchema>;

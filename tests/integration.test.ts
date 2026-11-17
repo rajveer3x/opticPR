@@ -33,7 +33,7 @@ beforeAll(async () => {
   worker = createWorker(db, namespace);
   await worker.waitUntilReady();
   adapter = await FixtureRepositoryAdapter.open();
-  server = createApp(db).listen(0, '127.0.0.1');
+  server = createApp(db, { allowFixtureInspection: true }).listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Missing HTTP address');

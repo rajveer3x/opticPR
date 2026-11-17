@@ -144,8 +144,8 @@ it('deduplicates ten concurrent deliveries, measures acknowledgment p95 and queu
   const run = await waitForReport(db, (await runFor(2)).id);
   expect(reportSchema.parse(run.report)).toMatchObject({ source: 'github', coverage: { status: 'partial', analyzedFiles: [] }, findings: [] });
   expect((await send('pull_request', pull(2, 'synchronize'), id)).status).toBe(409);
-  // Live data remains inaccessible through the unauthenticated fixture inspection route.
-  expect((await fetch(`${origin}/api/runs/${run.id}`)).status).toBe(404);
+  // Live reports require an authenticated dashboard session.
+  expect((await fetch(`${origin}/api/runs/${run.id}`)).status).toBe(401);
 });
 
 it.each(['opened', 'reopened', 'synchronize', 'ready_for_review'])('accepts an eligible %s PR', async action => {

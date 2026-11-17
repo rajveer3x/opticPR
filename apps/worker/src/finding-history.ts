@@ -122,23 +122,4 @@ export async function snapshotFindingHistory(tx: Tx, raw: Report): Promise<Repor
   return report;
 }
 
-/** Local operator entry point until authenticated maintainer mutations in 07. */
-export async function appendFindingDecision(db: PrismaClient, raw: unknown) {
-  const input = decisionInputSchema.parse(raw);
-  return db.$transaction(async tx => {
-    const run = await tx.reviewRun.findUniqueOrThrow({ where: { id: input.runId } });
-    await lockFindingHistory(tx, run.source, run.repositoryId, run.pullRequestNumber);
-    const snapshot = await tx.findingSnapshot.findUniqueOrThrow({ where: { runId: input.runId } });
-    const entry = reportSchema.parse(snapshot.report).history?.findings.find(item => item.findingId === input.findingId);
-    const finding = await tx.finding.findUniqueOrThrow({ where: { id: input.findingId } });
-    if (!entry?.observation || entry.state === 'needs_verification' || run.state !== 'completed' || finding.source !== run.source ||
-        finding.repositoryId !== run.repositoryId || finding.pullRequestNumber !== run.pullRequestNumber) throw new Error('Decision requires a confirmed observation in this PR snapshot');
-    const existing = await tx.findingDecision.findUnique({ where: { id: input.id } });
-    if (existing) {
-      const { createdAt: _createdAt, sequence: _sequence, ...previousInput } = existing;
-      if (digest(decisionInputSchema.parse(previousInput)) !== digest(input)) throw new Error('Decision idempotency key conflict');
-      return existing;
-    }
-    return tx.findingDecision.create({ data: input });
-  });
-}
+export { appendFindingDecision } from '@opticpr/runtime';

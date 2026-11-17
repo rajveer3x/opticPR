@@ -1,7 +1,7 @@
 import { reportSchema, type Report } from '@opticpr/contracts';
 import { Prisma, type PrismaClient } from '@opticpr/database';
 import { githubPublicationClientsFromEnv, type GitHubPublicationClientFactory } from '@opticpr/repository';
-import { AccessRevokedError, logger, repositoryScope } from '@opticpr/runtime';
+import { AccessRevokedError, dashboardRunUrl, logger, repositoryScope } from '@opticpr/runtime';
 import { lockPullRequest, observeLiveTarget, publicationIntent, publicationKey, pullKey, reviewTransactionOptions } from './current-review.js';
 import { publishInlineComments } from './inline-comments.js';
 
@@ -16,9 +16,15 @@ export function summaryBody(repositoryId: string, number: number, baseSha: strin
     lines.push(`Reviewed SHA: \`${report.input.headSha}\``, `Run: \`${report.runId}\``, '',
       `Coverage: **${report.coverage.status}** (${report.coverage.scope}).`,
       `Analyzed ${report.coverage.analyzedFiles.length} files; ${report.coverage.changedFiles.length} changed files in the comparison.`, '');
+    const fullReviewUrl = dashboardRunUrl(report.runId);
+    if (fullReviewUrl) lines.push(`[Open the full review](${fullReviewUrl})`, '');
     if (report.coverage.status !== 'complete') lines.push('Analysis is incomplete. An empty finding list does not indicate a clean review.', '');
     lines.push(`Findings: ${report.findings.length}.`, ...(report.enrichment ? [`Model enrichment: ${report.enrichment.status}; rejected candidates: ${report.enrichment.rejected}.`] : []));
-    for (const finding of report.findings) lines.push(`- ${escapeText(finding.title)} (${finding.severity}) — ${escapeText(finding.evidence.path)}:${finding.evidence.startLine}\n  ${escapeText(finding.impact)}\n  Verify: ${escapeText(finding.verification)}\n  Excerpt: ${escapeText(finding.evidence.excerpt)}`);
+    for (const finding of report.findings.slice(0, 5)) {
+      const findingUrl = fullReviewUrl ? `${fullReviewUrl}?finding=${encodeURIComponent(finding.id)}` : undefined;
+      lines.push(`- ${escapeText(finding.title)} (${finding.severity}) — ${escapeText(finding.evidence.path)}:${finding.evidence.startLine}\n  ${escapeText(finding.impact)}\n  Verify: ${escapeText(finding.verification)}\n  Excerpt: ${escapeText(finding.evidence.excerpt)}${findingUrl ? `\n  [Inspect evidence](${findingUrl})` : ''}`);
+    }
+    if (report.findings.length > 5) lines.push(`Additional findings: ${report.findings.length - 5}. Open the full review to inspect all findings.`);
     if (report.history) {
       lines.push('', 'Finding history:');
       for (const entry of report.history.findings.slice(0, 30)) {
