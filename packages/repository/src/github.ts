@@ -1,7 +1,7 @@
 import { Octokit } from '@octokit/rest';
 import { createAppAuth } from '@octokit/auth-app';
 import { githubRepositorySchema, inputSchema, shaSchema, type GitHubScope, type ReviewInput } from '@opticpr/contracts';
-import type { ChangedFile, RepositoryAdapter } from './index.js';
+import type { ChangedFile, RepositoryAdapter, SourceTree } from './index.js';
 
 export class IneligiblePullRequestError extends Error {
   constructor() { super('Pull request is closed or draft'); }
@@ -10,6 +10,7 @@ export interface GitHubRepositoryClient {
   pullRequest(number: number): Promise<{ number: number; state: string; draft: boolean; baseSha: string; headSha: string; repositoryId: string; title?: string }>;
   compare(baseSha: string, headSha: string): Promise<ChangedFile[]>;
   file(sha: string, path: string): Promise<string>;
+  sourceTree?(sha: string): Promise<SourceTree>;
 }
 export type GitHubClientFactory = (scope: GitHubScope, assertAccess: () => Promise<void>) => GitHubRepositoryClient;
 export interface SummaryComment { id: string; body: string; appOwned: boolean }
@@ -79,6 +80,17 @@ export function githubClientFactory(credentials: { appId: string; privateKey: st
         if (Array.isArray(data) || data.type !== 'file' || !('content' in data) || data.encoding !== 'base64') throw new Error('Unsupported GitHub file content');
         // Never fetch download_url or PR-supplied URLs.
         return Buffer.from(data.content, 'base64').toString('utf8');
+      },
+      async sourceTree(sha) {
+        shaSchema.parse(sha);
+        const octokit = await session();
+        const { data: commit } = await octokit.rest.git.getCommit({ ...target, commit_sha: sha });
+        if (commit.sha !== sha) throw new Error('Source tree commit mismatch');
+        const treeSha = shaSchema.parse(commit.tree.sha);
+        const { data: tree } = await octokit.rest.git.getTree({ ...target, tree_sha: treeSha, recursive: 'true' });
+        if (tree.sha !== treeSha) throw new Error('Source tree revision mismatch');
+        return { complete: tree.truncated === false, paths: tree.tree.flatMap(entry =>
+          entry.type === 'blob' && ['100644', '100755'].includes(entry.mode ?? '') && entry.path ? [entry.path] : []) };
       },
       async comments(number) {
         if (!publication) throw new Error('Publication credentials required');
@@ -163,6 +175,12 @@ export class GitHubRepositoryAdapter implements RepositoryAdapter {
     shaSchema.parse(sha); validatePath(path);
     if (this.pinned && ![this.pinned.baseSha, this.pinned.headSha].includes(sha)) throw new Error('Revision metadata mismatch');
     return this.client.file(sha, path);
+  }
+  async sourceTreeAt(sha: string): Promise<SourceTree> {
+    shaSchema.parse(sha);
+    if (this.pinned && ![this.pinned.baseSha, this.pinned.headSha].includes(sha)) throw new Error('Revision metadata mismatch');
+    if (!this.client.sourceTree) throw new Error('Source tree unavailable');
+    return this.client.sourceTree(sha);
   }
   async close(): Promise<void> {}
 }

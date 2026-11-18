@@ -1,0 +1,609 @@
+{
+  "version": 1,
+  "regression": {
+    "createdAt": "2026-11-18T12:41:39.673Z",
+    "completedAt": "2026-11-18T12:41:40.870Z",
+    "report": {
+      "schemaVersion": 1,
+      "runId": "cbb5c25a-c05c-4121-b703-1a8701a00d3a",
+      "logicalKey": "c851805f32d86fdff1927e5a7989d863145dc570a1c0db2c6c0d75598da85b49",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "fixture/missing-user",
+        "pullRequestNumber": 1,
+        "baseSha": "fb8a50ac04e25e4024e7450e46fc7d415c832560",
+        "headSha": "ea3e1f1933b3b772ea757e0602937c5743c00e70"
+      },
+      "configuration": {
+        "adapter": "review-demo-bundle-v1",
+        "analyzer": "local-analysis",
+        "analyzerVersion": "1",
+        "ruleRevision": "local-js-ts-v1",
+        "crossFileRuleRevision": "ts-missing-value-throws-v1",
+        "semgrepVersion": "1.144.0",
+        "grammarRevision": "js-0.23.1-ts-0.23.2-wasm-0.25.10",
+        "promptRevision": "review-v1",
+        "model": "qwen2.5-coder:7b",
+        "modelRevision": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+        "modelEnabled": false,
+        "contextTokens": 4096,
+        "contextMode": "function-context",
+        "maxFiles": 20,
+        "maxChangedLines": 800,
+        "modelDeadlineMs": 90000
+      },
+      "configurationDigest": "daf78ed102c5557590093eae3ad59f4e96a6565333f493828691302581922216",
+      "source": "fixture",
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "review-demo-bundle-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "completed",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "cross-file",
+          "status": "completed",
+          "source": "fixture",
+          "version": "ts-missing-value-throws-v1",
+          "detail": "Checked 3 head TypeScript files for direct call sites. See skipped files for coverage gaps."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "coverage": {
+        "status": "complete",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "src/users.ts"
+        ],
+        "analyzedFiles": [
+          "src/users.ts"
+        ],
+        "skippedFiles": [],
+        "detail": "Coverage includes pinned JS/TS static rules and a bounded TypeScript caller check. Optional model enrichment is disabled."
+      },
+      "comparison": [
+        {
+          "path": "src/users.ts",
+          "hunk": "diff --git a/src/users.ts b/src/users.ts\nindex 27604c2..916b018 100644\n--- a/src/users.ts\n+++ b/src/users.ts\n@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n",
+          "status": "modified"
+        }
+      ],
+      "findings": [
+        {
+          "id": "ba9ae711-f99c-47ec-be08-3047b6ca2b91",
+          "source": "fixture",
+          "ruleId": "opticpr.ts-missing-value-throws",
+          "severity": "high",
+          "title": "findUser now throws before its caller's missing-value fallback",
+          "impact": "The same missing-value branch now throws instead of returning undefined. The call in src/route.ts exits before reaching the fallback shown in the caller citation.",
+          "verification": "Exercise the caller with a missing record and check that it still returns the fallback response.",
+          "evidence": {
+            "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+            "path": "src/users.ts",
+            "startLine": 4,
+            "endLine": 4,
+            "excerpt": "    throw new Error('User not found');",
+            "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+          },
+          "identity": {
+            "kind": "static",
+            "class": "opticpr.ts-missing-value-throws",
+            "expression": "cebb4d271a47c567308c9b89751be2f595e3eae02339be1091b437de37742c5b",
+            "symbol": "findUser"
+          },
+          "citations": [
+            {
+              "kind": "static",
+              "ruleId": "opticpr.ts-missing-value-throws",
+              "evidence": {
+                "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                "path": "src/users.ts",
+                "startLine": 4,
+                "endLine": 4,
+                "excerpt": "    throw new Error('User not found');",
+                "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+              },
+              "role": "changed-throw"
+            },
+            {
+              "kind": "static",
+              "ruleId": "opticpr.ts-missing-value-throws",
+              "evidence": {
+                "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                "path": "src/route.ts",
+                "startLine": 4,
+                "endLine": 5,
+                "excerpt": "  const user = getUser(id);\n  if (!user) return { status: 404 };",
+                "hunk": ""
+              },
+              "role": "caller-fallback"
+            },
+            {
+              "kind": "static",
+              "ruleId": "opticpr.ts-missing-value-throws",
+              "evidence": {
+                "revision": "fb8a50ac04e25e4024e7450e46fc7d415c832560",
+                "path": "src/users.ts",
+                "startLine": 4,
+                "endLine": 4,
+                "excerpt": "    return undefined;",
+                "hunk": ""
+              },
+              "role": "base-return"
+            }
+          ]
+        }
+      ],
+      "history": {
+        "previousRunId": null,
+        "findings": [
+          {
+            "findingId": "ba9ae711-f99c-47ec-be08-3047b6ca2b91",
+            "state": "new",
+            "reason": "First observation of this condition.",
+            "observation": {
+              "id": "ba9ae711-f99c-47ec-be08-3047b6ca2b91",
+              "source": "fixture",
+              "ruleId": "opticpr.ts-missing-value-throws",
+              "severity": "high",
+              "title": "findUser now throws before its caller's missing-value fallback",
+              "impact": "The same missing-value branch now throws instead of returning undefined. The call in src/route.ts exits before reaching the fallback shown in the caller citation.",
+              "verification": "Exercise the caller with a missing record and check that it still returns the fallback response.",
+              "evidence": {
+                "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                "path": "src/users.ts",
+                "startLine": 4,
+                "endLine": 4,
+                "excerpt": "    throw new Error('User not found');",
+                "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+              },
+              "identity": {
+                "kind": "static",
+                "class": "opticpr.ts-missing-value-throws",
+                "expression": "cebb4d271a47c567308c9b89751be2f595e3eae02339be1091b437de37742c5b",
+                "symbol": "findUser"
+              },
+              "citations": [
+                {
+                  "kind": "static",
+                  "ruleId": "opticpr.ts-missing-value-throws",
+                  "evidence": {
+                    "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                    "path": "src/users.ts",
+                    "startLine": 4,
+                    "endLine": 4,
+                    "excerpt": "    throw new Error('User not found');",
+                    "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+                  },
+                  "role": "changed-throw"
+                },
+                {
+                  "kind": "static",
+                  "ruleId": "opticpr.ts-missing-value-throws",
+                  "evidence": {
+                    "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                    "path": "src/route.ts",
+                    "startLine": 4,
+                    "endLine": 5,
+                    "excerpt": "  const user = getUser(id);\n  if (!user) return { status: 404 };",
+                    "hunk": ""
+                  },
+                  "role": "caller-fallback"
+                },
+                {
+                  "kind": "static",
+                  "ruleId": "opticpr.ts-missing-value-throws",
+                  "evidence": {
+                    "revision": "fb8a50ac04e25e4024e7450e46fc7d415c832560",
+                    "path": "src/users.ts",
+                    "startLine": 4,
+                    "endLine": 4,
+                    "excerpt": "    return undefined;",
+                    "hunk": ""
+                  },
+                  "role": "base-return"
+                }
+              ]
+            },
+            "lastObservation": {
+              "id": "ba9ae711-f99c-47ec-be08-3047b6ca2b91",
+              "source": "fixture",
+              "ruleId": "opticpr.ts-missing-value-throws",
+              "severity": "high",
+              "title": "findUser now throws before its caller's missing-value fallback",
+              "impact": "The same missing-value branch now throws instead of returning undefined. The call in src/route.ts exits before reaching the fallback shown in the caller citation.",
+              "verification": "Exercise the caller with a missing record and check that it still returns the fallback response.",
+              "evidence": {
+                "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                "path": "src/users.ts",
+                "startLine": 4,
+                "endLine": 4,
+                "excerpt": "    throw new Error('User not found');",
+                "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+              },
+              "identity": {
+                "kind": "static",
+                "class": "opticpr.ts-missing-value-throws",
+                "expression": "cebb4d271a47c567308c9b89751be2f595e3eae02339be1091b437de37742c5b",
+                "symbol": "findUser"
+              },
+              "citations": [
+                {
+                  "kind": "static",
+                  "ruleId": "opticpr.ts-missing-value-throws",
+                  "evidence": {
+                    "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                    "path": "src/users.ts",
+                    "startLine": 4,
+                    "endLine": 4,
+                    "excerpt": "    throw new Error('User not found');",
+                    "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+                  },
+                  "role": "changed-throw"
+                },
+                {
+                  "kind": "static",
+                  "ruleId": "opticpr.ts-missing-value-throws",
+                  "evidence": {
+                    "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                    "path": "src/route.ts",
+                    "startLine": 4,
+                    "endLine": 5,
+                    "excerpt": "  const user = getUser(id);\n  if (!user) return { status: 404 };",
+                    "hunk": ""
+                  },
+                  "role": "caller-fallback"
+                },
+                {
+                  "kind": "static",
+                  "ruleId": "opticpr.ts-missing-value-throws",
+                  "evidence": {
+                    "revision": "fb8a50ac04e25e4024e7450e46fc7d415c832560",
+                    "path": "src/users.ts",
+                    "startLine": 4,
+                    "endLine": 4,
+                    "excerpt": "    return undefined;",
+                    "hunk": ""
+                  },
+                  "role": "base-return"
+                }
+              ]
+            },
+            "lastObservedRunId": "cbb5c25a-c05c-4121-b703-1a8701a00d3a",
+            "lastObservedConfigurationDigest": "daf78ed102c5557590093eae3ad59f4e96a6565333f493828691302581922216"
+          }
+        ]
+      },
+      "recheck": {
+        "completed": true,
+        "rules": [
+          "opticpr.dynamic-eval",
+          "opticpr.disabled-tls",
+          "opticpr.slice-exclusive-boundary"
+        ],
+        "files": [
+          "src/users.ts"
+        ],
+        "observations": []
+      },
+      "crossFileRecheck": {
+        "completed": true,
+        "callees": [
+          "src/users.ts"
+        ],
+        "callers": [
+          "src/users.ts",
+          "src/handled.ts",
+          "src/route.ts"
+        ],
+        "observations": [
+          {
+            "id": "b5def9302df3f611c388f7cf39b1e72c0715aa929255360abb14d116f6709bb2",
+            "source": "fixture",
+            "ruleId": "opticpr.ts-missing-value-throws",
+            "severity": "high",
+            "title": "findUser now throws before its caller's missing-value fallback",
+            "impact": "The same missing-value branch now throws instead of returning undefined. The call in src/route.ts exits before reaching the fallback shown in the caller citation.",
+            "verification": "Exercise the caller with a missing record and check that it still returns the fallback response.",
+            "evidence": {
+              "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+              "path": "src/users.ts",
+              "startLine": 4,
+              "endLine": 4,
+              "excerpt": "    throw new Error('User not found');",
+              "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+            },
+            "identity": {
+              "kind": "static",
+              "class": "opticpr.ts-missing-value-throws",
+              "expression": "cebb4d271a47c567308c9b89751be2f595e3eae02339be1091b437de37742c5b",
+              "symbol": "findUser"
+            },
+            "citations": [
+              {
+                "kind": "static",
+                "ruleId": "opticpr.ts-missing-value-throws",
+                "evidence": {
+                  "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                  "path": "src/users.ts",
+                  "startLine": 4,
+                  "endLine": 4,
+                  "excerpt": "    throw new Error('User not found');",
+                  "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+                },
+                "role": "changed-throw"
+              },
+              {
+                "kind": "static",
+                "ruleId": "opticpr.ts-missing-value-throws",
+                "evidence": {
+                  "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                  "path": "src/route.ts",
+                  "startLine": 4,
+                  "endLine": 5,
+                  "excerpt": "  const user = getUser(id);\n  if (!user) return { status: 404 };",
+                  "hunk": ""
+                },
+                "role": "caller-fallback"
+              },
+              {
+                "kind": "static",
+                "ruleId": "opticpr.ts-missing-value-throws",
+                "evidence": {
+                  "revision": "fb8a50ac04e25e4024e7450e46fc7d415c832560",
+                  "path": "src/users.ts",
+                  "startLine": 4,
+                  "endLine": 4,
+                  "excerpt": "    return undefined;",
+                  "hunk": ""
+                },
+                "role": "base-return"
+              }
+            ]
+          }
+        ]
+      },
+      "enrichment": {
+        "status": "skipped",
+        "accepted": 0,
+        "rejected": 0,
+        "detail": "Model enrichment is opt-in pending held-out quality evidence."
+      }
+    },
+    "caller": {
+      "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+      "path": "src/handled.ts",
+      "startLine": 4,
+      "endLine": 10,
+      "excerpt": "  try {\n    const user = getUser(id);\n    if (!user) return { status: 404 };\n    return { status: 200, user };\n  } catch {\n    return { status: 404 };\n  }",
+      "hunk": ""
+    }
+  },
+  "fix": {
+    "createdAt": "2026-11-18T12:41:40.983Z",
+    "completedAt": "2026-11-18T12:41:42.023Z",
+    "report": {
+      "schemaVersion": 1,
+      "runId": "590f61b8-ea4c-42ef-86cd-472a2a327af9",
+      "logicalKey": "dcff45ee08e4cb52bd02b0d317a97eba7ef746fea36c24d7cf022abdb139f30a",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "fixture/missing-user",
+        "pullRequestNumber": 1,
+        "baseSha": "fb8a50ac04e25e4024e7450e46fc7d415c832560",
+        "headSha": "3de34eee4e8a0f0f5c919c40a26d1e9ad97e5636"
+      },
+      "configuration": {
+        "adapter": "review-demo-bundle-v1",
+        "analyzer": "local-analysis",
+        "analyzerVersion": "1",
+        "ruleRevision": "local-js-ts-v1",
+        "crossFileRuleRevision": "ts-missing-value-throws-v1",
+        "semgrepVersion": "1.144.0",
+        "grammarRevision": "js-0.23.1-ts-0.23.2-wasm-0.25.10",
+        "promptRevision": "review-v1",
+        "model": "qwen2.5-coder:7b",
+        "modelRevision": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+        "modelEnabled": false,
+        "contextTokens": 4096,
+        "contextMode": "function-context",
+        "maxFiles": 20,
+        "maxChangedLines": 800,
+        "modelDeadlineMs": 90000
+      },
+      "configurationDigest": "daf78ed102c5557590093eae3ad59f4e96a6565333f493828691302581922216",
+      "source": "fixture",
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "review-demo-bundle-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "completed",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "cross-file",
+          "status": "completed",
+          "source": "fixture",
+          "version": "ts-missing-value-throws-v1",
+          "detail": "Checked 3 head TypeScript files for direct call sites. See skipped files for coverage gaps."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "coverage": {
+        "status": "complete",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "src/route.ts",
+          "src/users.ts"
+        ],
+        "analyzedFiles": [
+          "src/route.ts",
+          "src/users.ts"
+        ],
+        "skippedFiles": [],
+        "detail": "Coverage includes pinned JS/TS static rules and a bounded TypeScript caller check. Optional model enrichment is disabled."
+      },
+      "comparison": [
+        {
+          "path": "src/route.ts",
+          "hunk": "diff --git a/src/route.ts b/src/route.ts\nindex 083130d..320cb31 100644\n--- a/src/route.ts\n+++ b/src/route.ts\n@@ -1,7 +1,11 @@\n import { findUser as getUser } from './users.js';\n \n export function route(id: string) {\n-  const user = getUser(id);\n-  if (!user) return { status: 404 };\n-  return { status: 200, user };\n+  try {\n+    const user = getUser(id);\n+    if (!user) return { status: 404 };\n+    return { status: 200, user };\n+  } catch {\n+    return { status: 404 };\n+  }\n }\n",
+          "status": "modified"
+        },
+        {
+          "path": "src/users.ts",
+          "hunk": "diff --git a/src/users.ts b/src/users.ts\nindex 27604c2..916b018 100644\n--- a/src/users.ts\n+++ b/src/users.ts\n@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n",
+          "status": "modified"
+        }
+      ],
+      "findings": [],
+      "history": {
+        "previousRunId": "cbb5c25a-c05c-4121-b703-1a8701a00d3a",
+        "findings": [
+          {
+            "findingId": "ba9ae711-f99c-47ec-be08-3047b6ca2b91",
+            "state": "cleared_by_recheck",
+            "reason": "The same TypeScript rule rechecked the callee and caller and found the condition absent.",
+            "previous": {
+              "runId": "cbb5c25a-c05c-4121-b703-1a8701a00d3a",
+              "findingId": "ba9ae711-f99c-47ec-be08-3047b6ca2b91"
+            },
+            "lastObservation": {
+              "id": "ba9ae711-f99c-47ec-be08-3047b6ca2b91",
+              "source": "fixture",
+              "ruleId": "opticpr.ts-missing-value-throws",
+              "severity": "high",
+              "title": "findUser now throws before its caller's missing-value fallback",
+              "impact": "The same missing-value branch now throws instead of returning undefined. The call in src/route.ts exits before reaching the fallback shown in the caller citation.",
+              "verification": "Exercise the caller with a missing record and check that it still returns the fallback response.",
+              "evidence": {
+                "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                "path": "src/users.ts",
+                "startLine": 4,
+                "endLine": 4,
+                "excerpt": "    throw new Error('User not found');",
+                "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+              },
+              "identity": {
+                "kind": "static",
+                "class": "opticpr.ts-missing-value-throws",
+                "expression": "cebb4d271a47c567308c9b89751be2f595e3eae02339be1091b437de37742c5b",
+                "symbol": "findUser"
+              },
+              "citations": [
+                {
+                  "kind": "static",
+                  "ruleId": "opticpr.ts-missing-value-throws",
+                  "evidence": {
+                    "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                    "path": "src/users.ts",
+                    "startLine": 4,
+                    "endLine": 4,
+                    "excerpt": "    throw new Error('User not found');",
+                    "hunk": "@@ -1,7 +1,7 @@\n export function findUser(id: string) {\n   const user = id === 'known' ? { id } : undefined;\n   if (!user) {\n-    return undefined;\n+    throw new Error('User not found');\n   }\n   return user;\n }\n"
+                  },
+                  "role": "changed-throw"
+                },
+                {
+                  "kind": "static",
+                  "ruleId": "opticpr.ts-missing-value-throws",
+                  "evidence": {
+                    "revision": "ea3e1f1933b3b772ea757e0602937c5743c00e70",
+                    "path": "src/route.ts",
+                    "startLine": 4,
+                    "endLine": 5,
+                    "excerpt": "  const user = getUser(id);\n  if (!user) return { status: 404 };",
+                    "hunk": ""
+                  },
+                  "role": "caller-fallback"
+                },
+                {
+                  "kind": "static",
+                  "ruleId": "opticpr.ts-missing-value-throws",
+                  "evidence": {
+                    "revision": "fb8a50ac04e25e4024e7450e46fc7d415c832560",
+                    "path": "src/users.ts",
+                    "startLine": 4,
+                    "endLine": 4,
+                    "excerpt": "    return undefined;",
+                    "hunk": ""
+                  },
+                  "role": "base-return"
+                }
+              ]
+            },
+            "lastObservedRunId": "cbb5c25a-c05c-4121-b703-1a8701a00d3a",
+            "lastObservedConfigurationDigest": "daf78ed102c5557590093eae3ad59f4e96a6565333f493828691302581922216"
+          }
+        ]
+      },
+      "recheck": {
+        "completed": true,
+        "rules": [
+          "opticpr.dynamic-eval",
+          "opticpr.disabled-tls",
+          "opticpr.slice-exclusive-boundary"
+        ],
+        "files": [
+          "src/route.ts",
+          "src/users.ts"
+        ],
+        "observations": []
+      },
+      "crossFileRecheck": {
+        "completed": true,
+        "callees": [
+          "src/users.ts"
+        ],
+        "callers": [
+          "src/users.ts",
+          "src/route.ts",
+          "src/handled.ts"
+        ],
+        "observations": []
+      },
+      "enrichment": {
+        "status": "skipped",
+        "accepted": 0,
+        "rejected": 0,
+        "detail": "Model enrichment is opt-in pending held-out quality evidence."
+      }
+    },
+    "caller": {
+      "revision": "3de34eee4e8a0f0f5c919c40a26d1e9ad97e5636",
+      "path": "src/route.ts",
+      "startLine": 4,
+      "endLine": 10,
+      "excerpt": "  try {\n    const user = getUser(id);\n    if (!user) return { status: 404 };\n    return { status: 200, user };\n  } catch {\n    return { status: 404 };\n  }",
+      "hunk": "diff --git a/src/route.ts b/src/route.ts\nindex 083130d..320cb31 100644\n--- a/src/route.ts\n+++ b/src/route.ts\n@@ -1,7 +1,11 @@\n import { findUser as getUser } from './users.js';\n \n export function route(id: string) {\n-  const user = getUser(id);\n-  if (!user) return { status: 404 };\n-  return { status: 200, user };\n+  try {\n+    const user = getUser(id);\n+    if (!user) return { status: 404 };\n+    return { status: 200, user };\n+  } catch {\n+    return { status: 404 };\n+  }\n }\n"
+    }
+  }
+}

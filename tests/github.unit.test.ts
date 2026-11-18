@@ -25,12 +25,18 @@ it('recognizes only base changes on edited events and rejects unsafe numeric IDs
 
 it('mints a token for exactly the selected installation and repository and never follows PR URLs', async () => {
   const calls: { url: string; init: RequestInit | undefined }[] = [];
+  const treeSha = 'c'.repeat(40);
   const network = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: String(url), init });
     let data: unknown;
     if (String(url).endsWith('/access_tokens')) data = { token: 'test-installation-token', expires_at: new Date(Date.now() + 3600000).toISOString(), permissions: { contents: 'read', pull_requests: 'read' }, repositories: [{ id: 200, name: 'repository' }], repository_selection: 'selected' };
     else if (String(url).includes('/pulls/')) data = { number: 7, state: 'open', draft: false, base: { sha: baseSha, repo: { id: 200, name: 'repository', owner: { login: 'selected' } } }, head: { sha: headSha, repo: { url: 'https://evil.invalid' } } };
     else if (String(url).includes('/compare/')) data = { files: [{ filename: 'src/file.ts', patch: '@@\n-old\n+new', status: 'modified' }] };
+    else if (String(url).endsWith(`/git/commits/${headSha}`)) data = { sha: headSha, tree: { sha: treeSha } };
+    else if (String(url).includes(`/git/trees/${treeSha}`)) data = { sha: treeSha, truncated: true, tree: [
+      { type: 'blob', mode: '100644', path: 'src/file.ts' }, { type: 'blob', mode: '120000', path: 'src/link.ts' },
+      { type: 'commit', mode: '160000', path: 'vendor/repo' },
+    ] };
     else data = { type: 'file', content: Buffer.from('exact source').toString('base64'), encoding: 'base64', download_url: 'https://evil.invalid' };
     return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
   });
@@ -43,6 +49,8 @@ it('mints a token for exactly the selected installation and repository and never
   expect(await adapter.revisions()).toMatchObject({ source: 'github', repositoryId: '200', baseSha, headSha });
   expect(await adapter.changedFiles(baseSha, headSha)).toMatchObject([{ path: 'src/file.ts', hunk: '@@\n-old\n+new' }]);
   expect(await adapter.fileAt(headSha, 'src/file.ts')).toBe('exact source');
+  expect(await adapter.sourceTreeAt(headSha)).toEqual({ paths: ['src/file.ts'], complete: false });
+  expect(calls.find(call => call.url.includes('/git/trees/'))?.url).toContain('recursive=true');
   const token = calls.find(call => call.url.endsWith('/access_tokens'))!;
   expect(token.url).toBe('https://api.github.com/app/installations/100/access_tokens');
   expect(JSON.parse(String(token.init?.body))).toMatchObject({ repository_ids: [200], permissions: { contents: 'read', pull_requests: 'read' } });
@@ -53,6 +61,7 @@ it('mints a token for exactly the selected installation and repository and never
   allowed = false;
   await expect(adapter.changedFiles(baseSha, headSha)).rejects.toThrow('revoked');
   await expect(adapter.fileAt(headSha, 'src/file.ts')).rejects.toThrow('revoked');
+  await expect(adapter.sourceTreeAt(headSha)).rejects.toThrow('revoked');
   expect(network.mock.calls).toHaveLength(count);
   await expect(adapter.fileAt(headSha, '../secret')).rejects.toThrow('Invalid repository path');
 });

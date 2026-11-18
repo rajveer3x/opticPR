@@ -12,3 +12,7 @@ Map hunks to their enclosing function or method using Tree-sitter. Supply exact 
 - Give a schema-valid candidate the wrong excerpt. Reject the candidate and count the rejection.
 - Queue two reviews with retries. Instrument the inference client and verify peak active requests equals one across all stages on the local host.
 - Compare 4096 and 8192 context tokens on the demo machine. Record memory use, latency and quality. Run the diff-only and function-context modes on the same fixture.
+
+## Teach me after implementation
+
+Trace one source hunk through static scanning, context selection and model validation. Use a failed inference to explain why the static finding survives. Add the walkthrough to this file and explain it to me in chat using the [project teaching instructions](../../AGENTS.md).

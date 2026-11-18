@@ -10,3 +10,7 @@
 - Pause run A before promotion, complete run B, then resume A. Assert the final pointer and GitHub summary identify B. Repeat with A paused before publication.
 - Simulate a remote create that succeeds but loses its response. On retry, recover the app-authored comment by marker. Count exactly one visible summary.
 - Honor rate-limit hints and back off with jitter. After three failed attempts, preserve the intended revision, diagnostics and a retry path.
+
+## Teach me after implementation
+
+Walk through two pushes that finish in reverse order. Show which transaction and publication checks keep the newer review visible. Add the walkthrough to this file and explain it to me in chat using the [project teaching instructions](../../AGENTS.md).

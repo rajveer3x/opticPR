@@ -15,3 +15,7 @@
 | Dismiss, then move the line | Dismissal carries only across an unambiguous match, with actor and reason preserved |
 
 Run the boundary test on the trusted synthetic fixture to confirm the example’s expected behavior. Inspect both historical snapshots after the comparison.
+
+## Teach me after implementation
+
+Compare a moved finding, a verified fix and a skipped file. Explain which evidence lets OpticPR choose each history state. Add the walkthrough to this file and explain it to me in chat using the [project teaching instructions](../../AGENTS.md).

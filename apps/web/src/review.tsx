@@ -52,7 +52,10 @@ export function Review() {
     return <Failure error={query.error} retry={() => void query.refetch()} />;
   return <ReviewContent key={id} data={query.currentData} />;
 }
-function ReviewContent({ data }: { data: RunDetail }) {
+type ReviewViewData = Omit<RunDetail, 'repository'> & { repository: RunDetail['repository'] | null };
+type DemoView = { title: string; revisions: Record<string, string>; caller: ReactNode };
+
+export function ReviewContent({ data, demo }: { data: ReviewViewData; demo?: DemoView }) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [filter, setFilter] = useState('all');
@@ -60,7 +63,11 @@ function ReviewContent({ data }: { data: RunDetail }) {
   const [retry, retryState] = api.useRetryMutation();
   const [notice, setNotice] = useState('');
   const { repository, pullRequest: pr, report } = data;
-  const maintainer = repository.role === 'maintainer';
+  const maintainer = repository?.role === 'maintainer';
+  const changeRevision = (id: string) => navigate(
+    `${demo ? '/demo/runs' : '/runs'}/${id}${params.get('finding') ? `?finding=${params.get('finding')}` : ''}`,
+  );
+  const otherDemoRevision = demo && data.revisions.find(run => run.id !== data.id);
   const entries =
     report?.history?.findings ??
     report?.findings.map((finding) => ({
@@ -82,25 +89,23 @@ function ReviewContent({ data }: { data: RunDetail }) {
   const activeTarget = pr?.eligible && isActive(pr.desiredRun);
   return (
     <>
-      <Breadcrumb repository={repository} number={pr?.number} />
+      {repository && <Breadcrumb repository={repository} number={pr?.number} />}
       <div className="page-heading review-page-heading">
         <div>
           <div className="review-eyebrow">
-            <span className="eyebrow">PULL REQUEST REVIEW</span>
+            <span className="eyebrow">{demo ? 'SYNTHETIC REPOSITORY' : 'PULL REQUEST REVIEW'}</span>
             {pr && (
               <span className="pr-number">
                 <GitPullRequest size={12} />#{pr.number}
               </span>
             )}
           </div>
-          <h1>{pr?.title ?? 'Review snapshot'}</h1>
+          <h1>{demo?.title ?? pr?.title ?? 'Review snapshot'}</h1>
           <p className="muted">
             <span className="inline-repo">
-              {repository.owner}/{repository.name}
+              {repository ? `${repository.owner}/${repository.name}` : data.report?.input.repositoryId}
             </span>
-            <span className="dot-divider">·</span>
-            {when(data.createdAt)}
-            <span className="dot-divider">·</span>Attempt {data.attempt + 1}
+            {!demo && <><span className="dot-divider">·</span>{when(data.createdAt)}<span className="dot-divider">·</span>Attempt {data.attempt + 1}</>}
           </p>
         </div>
         <div className="actions">
@@ -114,7 +119,10 @@ function ReviewContent({ data }: { data: RunDetail }) {
               Retry review
             </button>
           )}
-          {pr && (
+          {demo && otherDemoRevision && <button className="button secondary" onClick={() => changeRevision(otherDemoRevision.id)}>
+            View {demo.revisions[otherDemoRevision.id]?.toLowerCase()} <ArrowRight size={14} />
+          </button>}
+          {pr && repository && (
             <External
               href={`https://github.com/${repository.owner}/${repository.name}/pull/${pr.number}`}
             >
@@ -159,21 +167,14 @@ function ReviewContent({ data }: { data: RunDetail }) {
                         ),
                       );
               const next = data.revisions[index];
-              if (next && next.id !== data.id)
-                navigate(
-                  `/runs/${next.id}${params.get('finding') ? `?finding=${params.get('finding')}` : ''}`,
-                );
+              if (next && next.id !== data.id) changeRevision(next.id);
             }}
-            onChange={(event) =>
-              navigate(
-                `/runs/${event.target.value}${params.get('finding') ? `?finding=${params.get('finding')}` : ''}`,
-              )
-            }
+            onChange={(event) => changeRevision(event.target.value)}
           >
             {data.revisions.map((run) => (
               <option value={run.id} key={run.id}>
-                {shortSha(run.baseSha)} → {shortSha(run.headSha)} · Attempt{' '}
-                {run.attempt + 1} · {when(run.createdAt)} · {run.state}
+                {demo ? `${demo.revisions[run.id]} · ${shortSha(run.headSha)}` : <>{shortSha(run.baseSha)} → {shortSha(run.headSha)} · Attempt{' '}
+                  {run.attempt + 1} · {when(run.createdAt)} · {run.state}</>}
               </option>
             ))}
           </select>
@@ -222,10 +223,10 @@ function ReviewContent({ data }: { data: RunDetail }) {
               </h2>
               <p className="muted">Claims and their evidence, side by side.</p>
             </div>
-            <span className="read-only-note">
+            {!demo && <span className="read-only-note">
               <ShieldCheck size={13} />
               {maintainer ? 'Maintainer access' : 'Member · read access'}
-            </span>
+            </span>}
           </div>
           {entries.length ? (
             <div className="review-workspace">
@@ -310,6 +311,7 @@ function ReviewContent({ data }: { data: RunDetail }) {
                     entry={selected}
                     data={data}
                     notify={setNotice}
+                    demo={demo}
                   />
                 ) : (
                   <Empty title="Nothing in this view">
@@ -421,6 +423,7 @@ function ReviewContent({ data }: { data: RunDetail }) {
   );
 }
 function Coverage({ report }: { report: Report }) {
+  const analyzedFiles = [...new Set([...report.coverage.analyzedFiles, ...(report.crossFileRecheck?.callers ?? [])])];
   return (
     <section
       className={`coverage-card coverage-${report.coverage.status}`}
@@ -449,7 +452,7 @@ function Coverage({ report }: { report: Report }) {
         <div className="coverage-metrics">
           <div>
             <strong>
-              {report.coverage.analyzedFiles.length.toString().padStart(2, '0')}
+              {analyzedFiles.length.toString().padStart(2, '0')}
             </strong>
             <span>Files analyzed</span>
           </div>
@@ -480,6 +483,8 @@ function Coverage({ report }: { report: Report }) {
             <span>
               {stage.name === 'semgrep'
                 ? 'Static analysis'
+                : stage.name === 'cross-file'
+                  ? 'TypeScript caller analysis'
                 : stage.name === 'model'
                   ? 'Model analysis'
                   : stage.name === 'repository'
@@ -500,7 +505,7 @@ function Coverage({ report }: { report: Report }) {
           <div className="stage-details">
             {report.stages.map((stage) => (
               <div key={stage.name}>
-                <strong>{stage.name}</strong>
+                <strong>{stage.name === 'cross-file' ? 'TypeScript caller analysis' : stage.name}</strong>
                 <code>{stage.version}</code>
                 <p>{stage.detail}</p>
               </div>
@@ -520,9 +525,9 @@ function Coverage({ report }: { report: Report }) {
             </>
           )}
           <h3>Analyzed files</h3>
-          {report.coverage.analyzedFiles.length ? (
+          {analyzedFiles.length ? (
             <ul className="analyzed-files">
-              {report.coverage.analyzedFiles.map((path) => (
+              {analyzedFiles.map((path) => (
                 <li key={path}>
                   <FileCode2 size={12} />
                   <code>{path}</code>
@@ -537,14 +542,22 @@ function Coverage({ report }: { report: Report }) {
     </section>
   );
 }
+const evidenceLabels = {
+  'changed-throw': 'Changed throw',
+  'caller-fallback': 'Caller fallback',
+  'base-return': 'Previous return',
+};
+
 function FindingDetail({
   entry,
   data,
   notify,
+  demo,
 }: {
   entry: FindingHistoryEntry;
-  data: RunDetail;
+  data: ReviewViewData;
   notify: (message: string) => void;
+  demo?: DemoView;
 }) {
   const finding = entry.observation ?? entry.lastObservation;
   const citations = finding.citations?.length
@@ -554,6 +567,7 @@ function FindingDetail({
           kind: finding.identity?.kind ?? 'static',
           ruleId: finding.ruleId,
           evidence: finding.evidence,
+          role: undefined,
         },
       ];
   const [citation, setCitation] = useState(0);
@@ -566,12 +580,12 @@ function FindingDetail({
   const latestDecision = decisions.at(-1) ?? entry.decision;
   const confirmed = !!entry.observation && entry.state !== 'needs_verification';
   const canDecide =
-    data.repository.role === 'maintainer' &&
+    data.repository?.role === 'maintainer' &&
     data.state === 'completed' &&
     confirmed;
   const { repository } = data;
   const evidence = proof.evidence;
-  const evidenceUrl = `https://github.com/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/blob/${evidence.revision}/${evidence.path.split('/').map(encodeURIComponent).join('/')}#L${evidence.startLine}-L${evidence.endLine}`;
+  const evidenceUrl = repository && `https://github.com/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/blob/${evidence.revision}/${evidence.path.split('/').map(encodeURIComponent).join('/')}#L${evidence.startLine}-L${evidence.endLine}`;
   return (
     <>
       <div className="finding-detail-heading">
@@ -589,7 +603,7 @@ function FindingDetail({
         <div className="prior-evidence-notice">
           <History size={15} />
           <span>
-            Retained evidence from <code>{shortSha(evidence.revision)}</code>.
+            Retained evidence from <code>{shortSha(finding.evidence.revision)}</code>.
             This is a prior observation, not a confirmed finding on the selected
             revision.
           </span>
@@ -617,37 +631,16 @@ function FindingDetail({
             ) : (
               <ScanLine size={13} />
             )}{' '}
-            {item.kind === 'static'
+            {item.role ? evidenceLabels[item.role] : item.kind === 'static'
               ? 'Static rule'
               : item.kind === 'model'
                 ? 'Model observation'
                 : 'Fixture rule'}
-            <code>{item.ruleId}</code>
+            {!item.role && <code>{item.ruleId}</code>}
           </button>
         ))}
       </div>
-      <div className="code-viewer">
-        <div className="code-toolbar">
-          <span>
-            <FileCode2 size={14} />
-            {evidence.path}
-          </span>
-          <code>
-            {shortSha(evidence.revision)} · L{evidence.startLine}–
-            {evidence.endLine}
-          </code>
-        </div>
-        <Diff hunk={evidence.hunk} evidence={evidence} />
-        <div className="code-footer">
-          <span>
-            <span className="evidence-indicator" />
-            Finding evidence at the cited revision
-          </span>
-          <External href={evidenceUrl} className="source-link">
-            View source
-          </External>
-        </div>
-      </div>
+      <SourceExcerpt evidence={evidence} side={proof.role === 'base-return' ? 'base' : 'head'} url={evidenceUrl || undefined} />
       <div className="finding-explanation">
         <Explanation icon={<AlertCircle size={16} />} title="Why it matters">
           <p>{finding.impact}</p>
@@ -663,10 +656,11 @@ function FindingDetail({
           <pre>{evidence.excerpt}</pre>
         </details>
       </div>
+      {demo?.caller}
       {entry.previous && (
         <Link
           className="prior-observation"
-          to={`/runs/${entry.previous.runId}?finding=${entry.previous.findingId}`}
+          to={`${demo ? '/demo/runs' : '/runs'}/${entry.previous.runId}?finding=${entry.previous.findingId}`}
         >
           <History size={17} />
           <span>
@@ -676,7 +670,7 @@ function FindingDetail({
           <ArrowRight size={16} />
         </Link>
       )}
-      <section className="decision-section">
+      {!demo && <section className="decision-section">
         <div className="decision-heading">
           <h3>
             <History size={15} />
@@ -725,14 +719,14 @@ function FindingDetail({
         ) : (
           <p className="decision-empty">
             No reviewer decisions yet.{' '}
-            {data.repository.role === 'member'
+            {data.repository?.role === 'member'
               ? 'Maintainers can record a reasoned dismissal or reopening.'
               : !confirmed
                 ? 'Decisions require a confirmed observation.'
                 : 'Any decision will be recorded here with its reason.'}
           </p>
         )}
-      </section>
+      </section>}
       {action && (
         <ActionDialog
           title={
@@ -762,6 +756,23 @@ function FindingDetail({
     </>
   );
 }
+export function SourceExcerpt({ evidence, url, side = 'head' }: {
+  evidence: Finding['evidence']; url?: string; side?: 'base' | 'head';
+}) {
+  return (
+    <div className="code-viewer">
+      <div className="code-toolbar">
+        <span><FileCode2 size={14} />{evidence.path}</span>
+        <code title={evidence.revision}>{shortSha(evidence.revision)} · L{evidence.startLine}–{evidence.endLine}</code>
+      </div>
+      <Diff hunk={evidence.hunk} evidence={evidence} side={side} />
+      {url && <div className="code-footer">
+        <span><span className="evidence-indicator" />Finding evidence at the cited revision</span>
+        <External href={url} className="source-link">View source</External>
+      </div>}
+    </div>
+  );
+}
 function Explanation({
   icon,
   title,
@@ -784,9 +795,11 @@ function Explanation({
 export function Diff({
   hunk,
   evidence,
+  side = 'head',
 }: {
   hunk: string;
   evidence: Finding['evidence'];
+  side?: 'base' | 'head';
 }) {
   let oldLine = 0;
   let headLine = 0;
@@ -808,8 +821,8 @@ export function Diff({
       const number = evidence.startLine + index;
       return (
         <div className="diff-line diff-evidence" key={index}>
-          <span />
-          <span>{number}</span>
+          <span>{side === 'base' ? number : null}</span>
+          <span>{side === 'head' ? number : null}</span>
           <code>{line || ' '}</code>
         </div>
       );
@@ -854,7 +867,7 @@ export function Diff({
       className="diff-scroll"
       tabIndex={0}
       role="region"
-      aria-label={`Source hunk at ${shortSha(evidence.revision)}. Evidence at head lines ${evidence.startLine} to ${evidence.endLine}`}
+      aria-label={`${hunk ? 'Source hunk' : 'Source excerpt'} at ${shortSha(evidence.revision)}. Evidence at ${side} lines ${evidence.startLine} to ${evidence.endLine}`}
     >
       <div className="diff-lines">{rows}</div>
     </div>

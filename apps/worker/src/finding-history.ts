@@ -21,13 +21,16 @@ function sameCondition(a: Finding, b: Finding) {
   return !!a.identity && !!b.identity && a.identity.class === b.identity.class &&
     a.identity.expression === b.identity.expression && a.identity.symbol === b.identity.symbol;
 }
-function mappedPath(report: Report, path: string): string | undefined {
-  const renames = report.comparison?.filter(change => change.status === 'renamed' && change.previousPath === path) ?? [];
+export function mappedPath(comparison: Report['comparison'], path: string): string | undefined {
+  const renames = comparison?.filter(change => change.status === 'renamed' && change.previousPath === path) ?? [];
   if (renames.length > 1) return;
   return renames.length === 1 ? renames[0]!.path : path;
 }
+export const callerProof = (finding: Finding) => finding.citations?.find(citation => citation.role === 'caller-fallback')?.evidence;
 function agrees(report: Report, current: Finding, old: Finding) {
-  return mappedPath(report, old.evidence.path) === current.evidence.path && sameCondition(current, old);
+  const caller = callerProof(old);
+  return mappedPath(report.comparison, old.evidence.path) === current.evidence.path && sameCondition(current, old) &&
+    (caller ? mappedPath(report.comparison, caller.path) === callerProof(current)?.path && !!callerProof(current) : !callerProof(current));
 }
 
 /** Sources agree only at the same exact anchor and semantic condition. Repeated
@@ -36,7 +39,7 @@ export function groupFindings(findings: Finding[]): Finding[] {
   const groups = new Map<string, Finding>();
   for (const raw of findings) {
     const finding = structuredClone(raw);
-    const key = digest({ identity: finding.identity ? { class: finding.identity.class, expression: finding.identity.expression, symbol: finding.identity.symbol } : finding.ruleId, evidence: finding.evidence });
+    const key = digest({ identity: finding.identity ? { class: finding.identity.class, expression: finding.identity.expression, symbol: finding.identity.symbol } : finding.ruleId, evidence: finding.evidence, caller: callerProof(finding) });
     const previous = groups.get(key);
     if (!previous) { groups.set(key, finding); continue; }
     const citations = [...(previous.citations ?? []), ...(finding.citations ?? [])];
@@ -53,7 +56,7 @@ export function compareFindings(report: Report, previous?: Report, decisions: De
   const anchored = groupFindings(report.findings);
   // Full-file matches outside the diff may confirm an existing finding, but may
   // never introduce a new finding outside the reviewed changed lines.
-  const supplemental = (report.recheck?.observations ?? []).filter(finding =>
+  const supplemental = [...(report.recheck?.observations ?? []), ...(report.crossFileRecheck?.observations ?? [])].filter(finding =>
     prior.some(old => agrees(report, finding, old.lastObservation)) && !anchored.some(item => item.id === finding.id));
   const current = groupFindings([...anchored, ...supplemental]);
   const edges = current.map(finding => prior.flatMap((old, index) => agrees(report, finding, old.lastObservation) ? [index] : []));
@@ -80,15 +83,20 @@ export function compareFindings(report: Report, previous?: Report, decisions: De
   for (const [index, old] of prior.entries()) {
     if (linked.has(index)) continue;
     const proof = old.lastObservation;
-    const path = mappedPath(report, proof.evidence.path);
+    const path = mappedPath(report.comparison, proof.evidence.path);
+    const oldCaller = callerProof(proof);
+    const caller = oldCaller && mappedPath(report.comparison, oldCaller.path);
     const recheck = report.recheck;
-    const deterministic = proof.identity?.kind === 'static' || proof.identity?.kind === 'fixture';
-    const clear = degree[index] === 0 && deterministic && old.lastObservedConfigurationDigest === report.configurationDigest &&
+    const crossFile = report.crossFileRecheck;
+    const equivalentRecheck = oldCaller ? !!path && !!caller && !!crossFile?.completed && crossFile.callees.includes(path) && crossFile.callers.includes(caller) :
       !!path && !!recheck?.completed && recheck.files.includes(path) && recheck.rules.includes(proof.ruleId) &&
       // A parse failure or filtered result must never masquerade as rule absence.
       !recheck.observations.some(item => item.evidence.path === path && item.ruleId === proof.ruleId && !item.identity);
+    const deterministic = proof.identity?.kind === 'static' || proof.identity?.kind === 'fixture';
+    const clear = degree[index] === 0 && deterministic && old.lastObservedConfigurationDigest === report.configurationDigest && equivalentRecheck;
     entries.push({ findingId: old.findingId, state: clear ? 'cleared_by_recheck' : 'needs_verification',
-      reason: clear ? 'Same deterministic rule and configuration fully rechecked the affected file; condition absent.' :
+      reason: clear ? oldCaller ? 'The same TypeScript rule rechecked the callee and caller and found the condition absent.' :
+        'Same deterministic rule and configuration fully rechecked the affected file; condition absent.' :
         degree[index] ? 'Multiple plausible matches; previous evidence retained.' : 'No complete equivalent deterministic recheck; previous evidence retained.',
       previous: { runId: old.lastObservedRunId, findingId: old.findingId }, lastObservation: proof, lastObservedRunId: old.lastObservedRunId,
       lastObservedConfigurationDigest: old.lastObservedConfigurationDigest,

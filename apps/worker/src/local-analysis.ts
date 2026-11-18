@@ -5,7 +5,8 @@ import { AccessRevokedError, digest } from '@opticpr/runtime';
 import { changedLines, excludedPath, excludedSource, findingLocation, headHunks, sourceContexts, type SourceContext } from './context.js';
 import { ollamaClient, withInferenceSlot, type InferenceClient } from './inference.js';
 import { scanSemgrep, staticRuleIds, type StaticScanner, type SnapshotFile } from './semgrep.js';
-import { previousFindingSnapshot } from './finding-history.js';
+import { callerProof, mappedPath, previousFindingSnapshot } from './finding-history.js';
+import { scanCrossFileRegression } from './cross-file-regression.js';
 
 type Identity = { runId: string; logicalKey: string; configurationDigest: string };
 type Finding = Report['findings'][number];
@@ -50,11 +51,8 @@ export async function analyzeLocal(
     if (digest(revisions) !== digest(input)) throw new Error('Repository revision metadata mismatch');
     const changes = await adapter.changedFiles(input.baseSha, input.headSha);
     const previous = await previousFindingSnapshot(db, stored);
-    const priorPaths = new Set(previous ? reportSchema.parse(previous.report).history?.findings.map(entry => {
-      const path = entry.lastObservation.evidence.path;
-      const renames = changes.filter(change => change.status === 'renamed' && change.previousPath === path);
-      return renames.length === 1 ? renames[0]!.path : path;
-    }) : []);
+    const priorFindings = previous ? reportSchema.parse(previous.report).history?.findings ?? [] : [];
+    const priorPaths = new Set(priorFindings.map(entry => mappedPath(changes, entry.lastObservation.evidence.path) ?? entry.lastObservation.evidence.path));
     // A real fix can remove a file from the cumulative PR diff altogether.
     // Recheck prior affected files explicitly, under the same budgets/exclusions.
     const scopes = [...changes, ...[...priorPaths].filter(path => !changes.some(change => change.path === path)).map(path => ({ path, hunk: '' }))];
@@ -101,17 +99,42 @@ export async function analyzeLocal(
     } catch { scanFailed = true; }
     for (const file of snapshots) if (!scanned.includes(file.path)) skippedFiles.push({ path: file.path, reason: scanFailed ? 'static scanner unavailable or failed' : 'static scanner skipped file' });
     const partial = skippedFiles.length > 0 || scanErrors > 0 || scanFailed;
+    let crossFileStage: Report['stages'][number] | undefined;
+    let crossFileRecheck: Report['crossFileRecheck'];
+    if (configuration.crossFileRuleRevision) {
+      const pairs = priorFindings.flatMap(({ lastObservation }) => {
+        const caller = callerProof(lastObservation);
+        return caller ? [{ callee: mappedPath(changes, lastObservation.evidence.path) ?? lastObservation.evidence.path,
+          caller: mappedPath(changes, caller.path) }] : [];
+      });
+      try {
+        const cross = await scanCrossFileRegression(adapter, input, snapshots, pairs);
+        findings.push(...cross.findings);
+        skippedFiles.push(...cross.gaps);
+        crossFileRecheck = cross.recheck;
+        crossFileStage = { name: 'cross-file', status: cross.recheck.completed ? 'completed' : 'partial', source: input.source,
+          version: configuration.crossFileRuleRevision, detail: cross.recheck.callers.length
+            ? `Checked ${cross.recheck.callers.length} head TypeScript files for direct call sites. See skipped files for coverage gaps.`
+            : cross.recheck.completed ? 'No eligible changed missing-value throw or prior caller pair required a caller scan.' : 'TypeScript caller coverage could not be established.' };
+      } catch (error) {
+        if (error instanceof AccessRevokedError) throw error;
+        crossFileStage = { name: 'cross-file', status: 'failed', source: input.source,
+          version: configuration.crossFileRuleRevision, detail: 'TypeScript caller analysis failed. Previously observed pairs require verification.' };
+      }
+    }
     report = reportSchema.parse({ schemaVersion: 1, ...identity, input, configuration, source: input.source,
       stages: [
         { name: 'repository', status: 'completed', source: input.source, version: configuration.adapter, detail: 'Read SHA-addressed source without executing repository code.' },
         { name: 'semgrep', status: scanFailed ? 'failed' : partial ? 'partial' : 'completed', source: input.source, version: `${configuration.semgrepVersion}/${configuration.ruleRevision}`, detail: `Pinned rules; read-only, network-disabled snapshot. Scanner errors: ${scanErrors}.` },
+        ...(crossFileStage ? [crossFileStage] : []),
         { name: 'model', status: 'skipped', source: input.source, version: configuration.modelRevision, detail: 'Static checkpoint committed before inference.' },
       ],
-      coverage: { status: partial ? 'partial' : 'complete', scope: 'local-js-ts', changedFiles: changes.map(file => file.path), analyzedFiles: scanned, skippedFiles,
+      coverage: { status: partial || (crossFileStage && crossFileStage.status !== 'completed') ? 'partial' : 'complete', scope: 'local-js-ts', changedFiles: changes.map(file => file.path), analyzedFiles: scanned, skippedFiles,
         detail: 'Coverage is limited to the pinned JS/TS rules and selected changed head files. Model analysis is pending.' },
       comparison: changes.map(change => ({ ...change, hunk: excludedPath(change.path) || excludedSource(change.hunk) ||
         skippedFiles.some(file => file.path === change.path && ['possible embedded secret', 'binary or invalid UTF-8', 'generated code', 'source size budget'].includes(file.reason)) ? '' : change.hunk })), findings,
       recheck: { completed: !scanFailed && scanErrors === 0, rules: staticRuleIds, files: scanned, observations },
+      ...(crossFileRecheck ? { crossFileRecheck } : {}),
     });
     // Upserts and completed checkpoint are a single durable transaction. A crash or
     // model failure cannot remove or multiply a committed observation.
@@ -129,7 +152,9 @@ export async function analyzeLocal(
     report.enrichment = { status: 'skipped', accepted: 0, rejected: 0, detail: 'Model enrichment is opt-in pending held-out quality evidence.' };
     report.stages = report.stages.filter(stage => stage.name !== 'model');
     report.stages.push({ name: 'model', status: 'skipped', source: input.source, version: configuration.modelRevision, detail: report.enrichment.detail });
-    report.coverage.detail = 'Coverage is limited to pinned JS/TS static rules. Optional model enrichment is disabled.';
+    report.coverage.detail = configuration.crossFileRuleRevision
+      ? 'Coverage includes pinned JS/TS static rules and a bounded TypeScript caller check. Optional model enrichment is disabled.'
+      : 'Coverage is limited to pinned JS/TS static rules. Optional model enrichment is disabled.';
     return reportSchema.parse(report);
   }
 
@@ -190,7 +215,9 @@ export async function analyzeLocal(
   report.stages = report.stages.filter(stage => stage.name !== 'model');
   report.stages.push({ name: 'model', status, source: input.source, version: `${configuration.promptRevision}/${configuration.modelRevision}`, detail });
   if (status !== 'completed') report.coverage.status = 'partial';
-  report.coverage.detail = 'Coverage is limited to pinned JS/TS static rules and bounded head context. See skipped files and model stage for gaps.';
+  report.coverage.detail = configuration.crossFileRuleRevision
+    ? 'Coverage includes pinned JS/TS static rules, a bounded TypeScript caller check and bounded head context. See stage details for gaps.'
+    : 'Coverage is limited to pinned JS/TS static rules and bounded head context. See skipped files and model stage for gaps.';
   report.findings = [...report.findings, ...new Map(novel.map(finding => [finding.id, finding])).values()];
   return reportSchema.parse(report);
 }

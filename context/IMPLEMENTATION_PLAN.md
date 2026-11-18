@@ -1,6 +1,6 @@
 # Implementation plan
 
-**Current state:** features 01–07 are implemented. Local acceptance checks use real PostgreSQL/Redis, pinned Semgrep and mocked GitHub; feature 04 benchmark results are recorded in `context/benchmarks/`. A clean CI workflow is included; hosted CI has not been run in this session. Feature 08 evaluation/recovery tooling is implemented. The temporary HTTPS preview has been retired at the user’s request; the current deliverable is a local-only CV project. Public hosting and public-origin OAuth setup are outside the current scope; hosted CI remains unverified. The eight-week schedule is an estimate. Each feature spec defines the evidence for completing that slice.
+**Current state:** All eleven features are implemented for the local portfolio scope. Local acceptance used PostgreSQL, Redis, the pinned Semgrep scanner, and mocked GitHub. The historical benchmark has recorded results and its labels await a second reviewer. The public preview was retired at the owner’s request. [Benchmark reviewer handoff](benchmarks/10-historical/label-review.md) · [Recorded local demo](feature-specs/11-local-review-demo.md)
 
 | Order | Milestone | Dependency | Exit evidence |
 | --- | --- | --- | --- |
@@ -12,6 +12,11 @@
 | 6 | [Inline review comments](feature-specs/06-inline-comments.md) | 3, 5 | Valid current anchors get one thread across retries. |
 | 7 | [Authenticated dashboard](feature-specs/07-dashboard.md) | 3, 5 | An authorized reviewer can inspect both runs. An outsider cannot open either by ID. |
 | 8 | [Evaluation and release](feature-specs/08-evaluation-release.md) | 1–7 | Reproducible comparison, recovery traces and a three-minute demo. |
+| 9 | [Cross-file regression detection](feature-specs/09-cross-file-regression.md) | 4, 5 | A changed throw and an unchanged caller have verifiable citations. |
+| 10 | [Historical regression benchmark](feature-specs/10-real-regression-benchmark.md) | 8 for corpus setup, 9 for final comparison | Independently checked labels and paired scanner results on held-out repositories. |
+| 11 | [Local review demo](feature-specs/11-local-review-demo.md) | 9, 10 for measured results | A 90-second recording and credential-free local replay show the regression and fix. |
+
+Feature 09 is implemented and verified through the worker, authenticated API, and browser. Feature 10 has a measured four-comparison pilot on two public repositories. The [raw runs](benchmarks/10-historical/raw.json) record the actual review IDs and coverage, and the [score](benchmarks/10-historical/score.json) reports zero additional detections. A second human review of the labels is pending. Feature 11 ships a captioned 90-second recording and a read-only viewer for the same two bundled reports. The demo is synthetic. A clean workspace replay covered the regression, fix, and rejection of a private report URL. [Demo walkthrough](feature-specs/11-local-review-demo.md) Revisit incremental caching once repeat-review measurements identify a bottleneck.
 
 Use week 1 for the fixture, week 2 for intake and publication, weeks 3–4 for local analysis, week 5 for history and inline comments, week 6 for the dashboard and weeks 7–8 for evaluation and release. Reserve the held-out evaluation cases before tuning prompts in week 3.
 

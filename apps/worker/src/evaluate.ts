@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { arch, cpus, platform, totalmem } from 'node:os';
-import { githubConfig, reportSchema, type LocalConfig } from '@opticpr/contracts';
+import { localAnalysisBaseline, reportSchema, type LocalConfig } from '@opticpr/contracts';
 import { PrismaClient } from '@opticpr/database';
 import { createQueue, digest, runIdentity, scheduleRun, waitForReport } from '@opticpr/runtime';
 import { createWorker } from './worker.js';
@@ -41,7 +41,7 @@ async function main() {
     if (!versionResponse.ok) throw new Error('Local Ollama unavailable');
     const version = await versionResponse.json();
     const tags = await fetch(`${origin}/api/tags`, { signal: AbortSignal.timeout(5000) }).then(response => response.json()) as { models: { name: string; digest: string }[] };
-    if (!tags.models.some(model => model.name === githubConfig.model && `sha256:${model.digest}` === githubConfig.modelRevision)) throw new Error('Pinned model unavailable');
+    if (!tags.models.some(model => model.name === localAnalysisBaseline.model && `sha256:${model.digest}` === localAnalysisBaseline.modelRevision)) throw new Error('Pinned model unavailable');
     // A new folder prevents accidental replacement of held-out measurements.
     await mkdir(output, { recursive: false });
     const namespace = `evaluation_${randomUUID().replaceAll('-', '')}`;
@@ -50,7 +50,7 @@ async function main() {
     const queue = createQueue(namespace);
     const samples: EvaluationSample[] = [];
     const configurations: Record<string, LocalConfig> = Object.fromEntries(evaluationArms.map(arm => [arm, {
-      ...githubConfig, adapter: 'evaluation-bundle-v1', modelEnabled: arm !== 'semgrep', contextMode: arm === 'diff-only' ? 'diff-only' : 'function-context',
+      ...localAnalysisBaseline, adapter: 'evaluation-bundle-v1', modelEnabled: arm !== 'semgrep', contextMode: arm === 'diff-only' ? 'diff-only' : 'function-context',
     }]));
     const raw = { version: 1, startedAt: new Date().toISOString(), split, datasetSeal: dataset.seal, labeler: dataset.labeler,
       disputes: dataset.disputes, independentReview: dataset.independentReview, splitPolicy: dataset.splitPolicy,
@@ -75,7 +75,7 @@ async function main() {
         let modelLoadedBefore: boolean | undefined;
         if (arm !== 'semgrep') {
           const loaded = await fetch(`${origin}/api/ps`, { signal: AbortSignal.timeout(5000) }).then(response => response.json()) as { models?: { name: string }[] };
-          modelLoadedBefore = !!loaded.models?.some(model => model.name === githubConfig.model);
+          modelLoadedBefore = !!loaded.models?.some(model => model.name === localAnalysisBaseline.model);
         }
         const start = performance.now();
         const run = await scheduleRun(db, queue, dataset.manifest[item.id]!, configurations[arm]!);

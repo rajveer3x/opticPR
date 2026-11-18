@@ -15,8 +15,14 @@ import { api, errorMessage, store } from './api';
 import { Loading, Mark } from './components';
 import { Repositories, PullRequests } from './repositories';
 import { Review } from './review';
+import { Demo } from './demo';
 
 export function App() {
+  const { pathname } = useLocation();
+  return pathname === '/demo' || pathname.startsWith('/demo/') ? <Demo /> : <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
   const expired = useSelector(
     (state: ReturnType<typeof store.getState>) => state.auth.expired,
   );

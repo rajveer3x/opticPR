@@ -4586,3 +4586,36 @@ html[data-motion='off'] {
 .auth-transition {
   padding-top: 0;
 }
+
+.demo-mode {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.workspace .demo-main {
+  padding-top: 28px;
+  padding-bottom: 40px;
+}
+
+.demo-caller {
+  margin: 20px 29px;
+  border: 1px solid #3e352a;
+  border-radius: 6px;
+}
+
+.demo-caller > summary {
+  padding: 10px 12px;
+}
+
+.demo-caller > p {
+  padding: 0 12px;
+  font-size: 0.85rem;
+}
+
+.demo-caller > .code-viewer {
+  margin: 12px;
+}
+
+.demo-caller .diff-meta {
+  display: none;
+}

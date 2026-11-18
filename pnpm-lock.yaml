@@ -112,6 +112,9 @@ importers:
       tree-sitter-typescript:
         specifier: 0.23.2
         version: 0.23.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
       web-tree-sitter:
         specifier: 0.25.10
         version: 0.25.10

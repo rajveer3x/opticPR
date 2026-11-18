@@ -14,8 +14,9 @@ const intakeConfigSchema = z.object({
   analyzerVersion: z.literal('1'), ruleRevision: z.literal('none'),
 });
 export const localConfigSchema = z.object({
-  adapter: z.enum(['github-rest-v1', 'pagination-bundle-v1', 'evaluation-bundle-v1']), analyzer: z.literal('local-analysis'),
+  adapter: z.enum(['github-rest-v1', 'pagination-bundle-v1', 'evaluation-bundle-v1', 'historical-git-v1', 'review-demo-bundle-v1']), analyzer: z.literal('local-analysis'),
   analyzerVersion: z.literal('1'), ruleRevision: z.literal('local-js-ts-v1'),
+  crossFileRuleRevision: z.literal('ts-missing-value-throws-v1').optional(),
   semgrepVersion: z.literal('1.144.0'), grammarRevision: z.literal('js-0.23.1-ts-0.23.2-wasm-0.25.10'),
   promptRevision: z.literal('review-v1'), model: z.literal('qwen2.5-coder:7b'),
   modelRevision: z.literal('sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364'),
@@ -25,12 +26,13 @@ export const localConfigSchema = z.object({
 });
 export const githubConfigSchema = z.union([intakeConfigSchema, localConfigSchema]);
 export const configSchema = z.union([fixtureConfigSchema, intakeConfigSchema, localConfigSchema]);
-export const githubConfig = localConfigSchema.parse({
+export const localAnalysisBaseline = localConfigSchema.parse({
   adapter: 'github-rest-v1', analyzer: 'local-analysis', analyzerVersion: '1', ruleRevision: 'local-js-ts-v1',
   semgrepVersion: '1.144.0', grammarRevision: 'js-0.23.1-ts-0.23.2-wasm-0.25.10', promptRevision: 'review-v1',
   model: 'qwen2.5-coder:7b', modelRevision: 'sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364',
   modelEnabled: false, contextTokens: 4096, contextMode: 'function-context', maxFiles: 20, maxChangedLines: 800, modelDeadlineMs: 90000,
 });
+export const githubConfig = localConfigSchema.parse({ ...localAnalysisBaseline, crossFileRuleRevision: 'ts-missing-value-throws-v1' });
 export type LocalConfig = z.infer<typeof localConfigSchema>;
 export const fixtureConfig = fixtureConfigSchema.parse({
   adapter: 'pagination-bundle-v1', analyzer: 'fixture-pagination-stub',
@@ -38,7 +40,7 @@ export const fixtureConfig = fixtureConfigSchema.parse({
 });
 export const queueJobSchema = z.object({ runId: z.uuid() });
 export const stageSchema = z.object({
-  name: z.enum(['repository', 'analysis', 'semgrep', 'model']),
+  name: z.enum(['repository', 'analysis', 'semgrep', 'cross-file', 'model']),
   status: z.enum(['completed', 'skipped', 'partial', 'failed']), source: z.enum(['fixture', 'github']),
   version: z.string(), detail: z.string(),
 });
@@ -51,6 +53,7 @@ export const findingIdentitySchema = z.object({
 });
 export const citationSchema = z.object({
   kind: z.enum(['static', 'model', 'fixture']), ruleId: z.string(), evidence: evidenceSchema,
+  role: z.enum(['changed-throw', 'caller-fallback', 'base-return']).optional(),
 });
 export const findingSchema = z.object({
   id: z.string(), source: z.enum(['fixture', 'github']), ruleId: z.string(),
@@ -92,6 +95,7 @@ export const reportSchema = z.object({
   history: findingHistorySchema.optional(),
   // Full-file deterministic results, including matches outside added diff lines.
   recheck: z.object({ completed: z.boolean(), rules: z.array(z.string()), files: z.array(z.string()), observations: z.array(findingSchema) }).optional(),
+  crossFileRecheck: z.object({ completed: z.boolean(), callees: z.array(z.string()), callers: z.array(z.string()), observations: z.array(findingSchema) }).optional(),
   enrichment: z.object({
     status: z.enum(['completed', 'partial', 'failed', 'skipped']), accepted: z.number().int().nonnegative(),
     rejected: z.number().int().nonnegative(), detail: z.string(),
@@ -100,6 +104,14 @@ export const reportSchema = z.object({
 export type ReviewInput = z.infer<typeof inputSchema>;
 export type AnalysisConfig = z.infer<typeof configSchema>;
 export type Report = z.infer<typeof reportSchema>;
+
+const demoInputSchema = inputSchema.extend({ source: z.literal('fixture'), repositoryId: z.literal('fixture/missing-user') });
+export const demoManifestSchema = z.object({ regression: demoInputSchema, fix: demoInputSchema }).refine(({ regression, fix }) =>
+  regression.baseSha === fix.baseSha && regression.pullRequestNumber === fix.pullRequestNumber &&
+  new Set([regression.baseSha, regression.headSha, fix.headSha]).size === 3);
+const demoRunSchema = z.object({ createdAt: z.iso.datetime(), completedAt: z.iso.datetime(), report: reportSchema, caller: evidenceSchema });
+export const demoReplaySchema = z.object({ version: z.literal(1), regression: demoRunSchema, fix: demoRunSchema });
+export type DemoReplay = z.infer<typeof demoReplaySchema>;
 
 // IDs stay strings in storage; accepting only safe numeric GitHub IDs avoids precision loss.
 export const githubIdSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER).transform(String);

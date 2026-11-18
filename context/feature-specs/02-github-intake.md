@@ -10,3 +10,7 @@
 - Deliver an eligible event ten times with the same delivery ID. Expect one durable receipt and one logical run. Measure local acknowledgment p95 against the proposed one-second target.
 - Retarget to a base with a different SHA while the head remains fixed. An edited event produces a new key and diff. A title-only edit does not schedule a new comparison.
 - Restart Redis between receipt and dispatch. Reconciliation recovers the run. On repository removal, cancel outstanding work and revoke access.
+
+## Teach me after implementation
+
+Follow one signed delivery from receipt to dispatch. Show which database record allows the worker to recover when Redis is unavailable. Add the walkthrough to this file and explain it to me in chat using the [project teaching instructions](../../AGENTS.md).

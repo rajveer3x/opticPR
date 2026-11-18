@@ -1,0 +1,563 @@
+{
+  "version": 1,
+  "startedAt": "2026-11-18T11:27:37.985Z",
+  "seal": {
+    "casesSha256": "a92d08a7da81ce83290ea673feea4c90294bf0c39c7dd672358d3c7e912c555f"
+  },
+  "labelReview": {
+    "status": "provisional",
+    "independentReviewer": null,
+    "disagreements": []
+  },
+  "configurations": {
+    "semgrep": {
+      "adapter": "historical-git-v1",
+      "analyzer": "local-analysis",
+      "analyzerVersion": "1",
+      "ruleRevision": "local-js-ts-v1",
+      "semgrepVersion": "1.144.0",
+      "grammarRevision": "js-0.23.1-ts-0.23.2-wasm-0.25.10",
+      "promptRevision": "review-v1",
+      "model": "qwen2.5-coder:7b",
+      "modelRevision": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+      "modelEnabled": false,
+      "contextTokens": 4096,
+      "contextMode": "function-context",
+      "maxFiles": 20,
+      "maxChangedLines": 800,
+      "modelDeadlineMs": 90000
+    },
+    "semgrep-plus-cross-file": {
+      "adapter": "historical-git-v1",
+      "analyzer": "local-analysis",
+      "analyzerVersion": "1",
+      "ruleRevision": "local-js-ts-v1",
+      "crossFileRuleRevision": "ts-missing-value-throws-v1",
+      "semgrepVersion": "1.144.0",
+      "grammarRevision": "js-0.23.1-ts-0.23.2-wasm-0.25.10",
+      "promptRevision": "review-v1",
+      "model": "qwen2.5-coder:7b",
+      "modelRevision": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+      "modelEnabled": false,
+      "contextTokens": 4096,
+      "contextMode": "function-context",
+      "maxFiles": 20,
+      "maxChangedLines": 800,
+      "modelDeadlineMs": 90000
+    }
+  },
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "cpu": "Apple M5",
+    "logicalCpus": 10,
+    "memoryBytes": 17179869184,
+    "node": "v26.5.0",
+    "git": "git version 2.55.0",
+    "docker": "29.6.1 linux/arm64",
+    "opticprCommit": "bf29813f029835f6d3924018a3a298eff8c32460",
+    "opticprWorktreeDirty": true,
+    "semgrepImage": "semgrep/semgrep:1.144.0@sha256:10301f060aacf84078f9704fb1ba3a321df4ac46b009fd29c1c66880d1db8e77"
+  },
+  "methodology": "Serial paired runs, alternating which arm goes first, with isolated database schemas and queues. One run per arm and case. Timer includes scheduling, queue, pinned source reads, analysis and report finalization. Remote Git fetch and independent citation checks are outside the timer. No special cache reset or warm-up.",
+  "samples": [
+    {
+      "caseId": "ky-abort-signal-regression",
+      "arm": "semgrep",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "sindresorhus/ky",
+        "pullRequestNumber": 683,
+        "baseSha": "b49cd03d8673ea522a29bae4ef6b4672cf23201b",
+        "headSha": "e48386e70144bfb7ccd2264ab5760b154048cf48"
+      },
+      "runId": "0cb68abd-338a-42eb-ad70-6841ef979d83",
+      "configurationDigest": "10c7875d1e7c28dd331c404c44fdd56a955942a9166cb1d7521eadcd5830896d",
+      "findings": [],
+      "coverage": {
+        "status": "partial",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "package.json",
+          "source/core/Ky.ts",
+          "test/memory-leak.ts"
+        ],
+        "analyzedFiles": [
+          "source/core/Ky.ts"
+        ],
+        "skippedFiles": [
+          {
+            "path": "package.json",
+            "reason": "unsupported file type"
+          },
+          {
+            "path": "test/memory-leak.ts",
+            "reason": "static scanner skipped file"
+          }
+        ],
+        "detail": "Coverage is limited to pinned JS/TS static rules. Optional model enrichment is disabled."
+      },
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "historical-git-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "partial",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "elapsedMs": 1035,
+      "verifiedEvidence": []
+    },
+    {
+      "caseId": "ky-abort-signal-regression",
+      "arm": "semgrep-plus-cross-file",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "sindresorhus/ky",
+        "pullRequestNumber": 683,
+        "baseSha": "b49cd03d8673ea522a29bae4ef6b4672cf23201b",
+        "headSha": "e48386e70144bfb7ccd2264ab5760b154048cf48"
+      },
+      "runId": "498a552d-75f8-4507-a947-5d5ad38e15eb",
+      "configurationDigest": "63041806fc10696e84d26e6f4b82d9df402dda3d67e1bbdd1a03066ed4071760",
+      "findings": [],
+      "coverage": {
+        "status": "partial",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "package.json",
+          "source/core/Ky.ts",
+          "test/memory-leak.ts"
+        ],
+        "analyzedFiles": [
+          "source/core/Ky.ts"
+        ],
+        "skippedFiles": [
+          {
+            "path": "package.json",
+            "reason": "unsupported file type"
+          },
+          {
+            "path": "test/memory-leak.ts",
+            "reason": "static scanner skipped file"
+          }
+        ],
+        "detail": "Coverage includes pinned JS/TS static rules and a bounded TypeScript caller check. Optional model enrichment is disabled."
+      },
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "historical-git-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "partial",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "cross-file",
+          "status": "completed",
+          "source": "fixture",
+          "version": "ts-missing-value-throws-v1",
+          "detail": "No eligible changed missing-value throw or prior caller pair required a caller scan."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "elapsedMs": 1032,
+      "verifiedEvidence": []
+    },
+    {
+      "caseId": "ky-abort-signal-guard",
+      "arm": "semgrep-plus-cross-file",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "sindresorhus/ky",
+        "pullRequestNumber": 711,
+        "baseSha": "3207ecc30677fea718b8206a1bd9d3ea152a9975",
+        "headSha": "24eec6fef2db724153915a1f80098216fe7571a8"
+      },
+      "runId": "1dfd6d2f-4bc3-4153-aab6-6bbdca0f870a",
+      "configurationDigest": "63041806fc10696e84d26e6f4b82d9df402dda3d67e1bbdd1a03066ed4071760",
+      "findings": [],
+      "coverage": {
+        "status": "complete",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "source/core/Ky.ts",
+          "source/core/constants.ts"
+        ],
+        "analyzedFiles": [
+          "source/core/Ky.ts",
+          "source/core/constants.ts"
+        ],
+        "skippedFiles": [],
+        "detail": "Coverage includes pinned JS/TS static rules and a bounded TypeScript caller check. Optional model enrichment is disabled."
+      },
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "historical-git-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "completed",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "cross-file",
+          "status": "completed",
+          "source": "fixture",
+          "version": "ts-missing-value-throws-v1",
+          "detail": "No eligible changed missing-value throw or prior caller pair required a caller scan."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "elapsedMs": 1035,
+      "verifiedEvidence": []
+    },
+    {
+      "caseId": "ky-abort-signal-guard",
+      "arm": "semgrep",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "sindresorhus/ky",
+        "pullRequestNumber": 711,
+        "baseSha": "3207ecc30677fea718b8206a1bd9d3ea152a9975",
+        "headSha": "24eec6fef2db724153915a1f80098216fe7571a8"
+      },
+      "runId": "9af0c45b-5fba-4ad1-a4cd-b1f589c2409e",
+      "configurationDigest": "10c7875d1e7c28dd331c404c44fdd56a955942a9166cb1d7521eadcd5830896d",
+      "findings": [],
+      "coverage": {
+        "status": "complete",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "source/core/Ky.ts",
+          "source/core/constants.ts"
+        ],
+        "analyzedFiles": [
+          "source/core/Ky.ts",
+          "source/core/constants.ts"
+        ],
+        "skippedFiles": [],
+        "detail": "Coverage is limited to pinned JS/TS static rules. Optional model enrichment is disabled."
+      },
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "historical-git-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "completed",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "elapsedMs": 1036,
+      "verifiedEvidence": []
+    },
+    {
+      "caseId": "mcp-empty-sse-regression",
+      "arm": "semgrep",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "modelcontextprotocol/typescript-sdk",
+        "pullRequestNumber": 1129,
+        "baseSha": "b59a2bde7d134f1c5b834fe33df71e45e54c1ba5",
+        "headSha": "3c50d07e9f390751df4f6da87fde369074c41e6c"
+      },
+      "runId": "7ebdcae9-d156-4a5d-ac84-92f25097d778",
+      "configurationDigest": "10c7875d1e7c28dd331c404c44fdd56a955942a9166cb1d7521eadcd5830896d",
+      "findings": [],
+      "coverage": {
+        "status": "partial",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "src/client/streamableHttp.test.ts",
+          "src/client/streamableHttp.ts",
+          "src/examples/client/ssePollingClient.ts",
+          "src/examples/server/ssePollingExample.ts",
+          "src/integration-tests/taskResumability.test.ts",
+          "src/server/streamableHttp.test.ts",
+          "src/server/streamableHttp.ts"
+        ],
+        "analyzedFiles": [
+          "src/client/streamableHttp.test.ts",
+          "src/client/streamableHttp.ts",
+          "src/examples/client/ssePollingClient.ts",
+          "src/examples/server/ssePollingExample.ts",
+          "src/integration-tests/taskResumability.test.ts",
+          "src/server/streamableHttp.ts"
+        ],
+        "skippedFiles": [
+          {
+            "path": "src/server/streamableHttp.test.ts",
+            "reason": "800-changed-line budget"
+          }
+        ],
+        "detail": "Coverage is limited to pinned JS/TS static rules. Optional model enrichment is disabled."
+      },
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "historical-git-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "partial",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "elapsedMs": 1139,
+      "verifiedEvidence": []
+    },
+    {
+      "caseId": "mcp-empty-sse-regression",
+      "arm": "semgrep-plus-cross-file",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "modelcontextprotocol/typescript-sdk",
+        "pullRequestNumber": 1129,
+        "baseSha": "b59a2bde7d134f1c5b834fe33df71e45e54c1ba5",
+        "headSha": "3c50d07e9f390751df4f6da87fde369074c41e6c"
+      },
+      "runId": "cd7b3527-e2f8-4c3a-95e7-b08e2530cd02",
+      "configurationDigest": "63041806fc10696e84d26e6f4b82d9df402dda3d67e1bbdd1a03066ed4071760",
+      "findings": [],
+      "coverage": {
+        "status": "partial",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "src/client/streamableHttp.test.ts",
+          "src/client/streamableHttp.ts",
+          "src/examples/client/ssePollingClient.ts",
+          "src/examples/server/ssePollingExample.ts",
+          "src/integration-tests/taskResumability.test.ts",
+          "src/server/streamableHttp.test.ts",
+          "src/server/streamableHttp.ts"
+        ],
+        "analyzedFiles": [
+          "src/client/streamableHttp.test.ts",
+          "src/client/streamableHttp.ts",
+          "src/examples/client/ssePollingClient.ts",
+          "src/examples/server/ssePollingExample.ts",
+          "src/integration-tests/taskResumability.test.ts",
+          "src/server/streamableHttp.ts"
+        ],
+        "skippedFiles": [
+          {
+            "path": "src/server/streamableHttp.test.ts",
+            "reason": "800-changed-line budget"
+          }
+        ],
+        "detail": "Coverage includes pinned JS/TS static rules and a bounded TypeScript caller check. Optional model enrichment is disabled."
+      },
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "historical-git-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "partial",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "cross-file",
+          "status": "completed",
+          "source": "fixture",
+          "version": "ts-missing-value-throws-v1",
+          "detail": "No eligible changed missing-value throw or prior caller pair required a caller scan."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "elapsedMs": 1164,
+      "verifiedEvidence": []
+    },
+    {
+      "caseId": "mcp-empty-sse-guard",
+      "arm": "semgrep-plus-cross-file",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "modelcontextprotocol/typescript-sdk",
+        "pullRequestNumber": 1184,
+        "baseSha": "b9538a222a6042188e52fc92b54becd304c15d57",
+        "headSha": "9203091219db5e90e5f66a3e1492706a15feab39"
+      },
+      "runId": "86ecf1e9-234d-43c7-99f4-6b2d96f5a370",
+      "configurationDigest": "63041806fc10696e84d26e6f4b82d9df402dda3d67e1bbdd1a03066ed4071760",
+      "findings": [],
+      "coverage": {
+        "status": "complete",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "src/client/streamableHttp.test.ts",
+          "src/client/streamableHttp.ts"
+        ],
+        "analyzedFiles": [
+          "src/client/streamableHttp.test.ts",
+          "src/client/streamableHttp.ts"
+        ],
+        "skippedFiles": [],
+        "detail": "Coverage includes pinned JS/TS static rules and a bounded TypeScript caller check. Optional model enrichment is disabled."
+      },
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "historical-git-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "completed",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "cross-file",
+          "status": "completed",
+          "source": "fixture",
+          "version": "ts-missing-value-throws-v1",
+          "detail": "No eligible changed missing-value throw or prior caller pair required a caller scan."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "elapsedMs": 1038,
+      "verifiedEvidence": []
+    },
+    {
+      "caseId": "mcp-empty-sse-guard",
+      "arm": "semgrep",
+      "input": {
+        "source": "fixture",
+        "repositoryId": "modelcontextprotocol/typescript-sdk",
+        "pullRequestNumber": 1184,
+        "baseSha": "b9538a222a6042188e52fc92b54becd304c15d57",
+        "headSha": "9203091219db5e90e5f66a3e1492706a15feab39"
+      },
+      "runId": "68622034-5874-4440-8d6e-b8f1f7de5030",
+      "configurationDigest": "10c7875d1e7c28dd331c404c44fdd56a955942a9166cb1d7521eadcd5830896d",
+      "findings": [],
+      "coverage": {
+        "status": "complete",
+        "scope": "local-js-ts",
+        "changedFiles": [
+          "src/client/streamableHttp.test.ts",
+          "src/client/streamableHttp.ts"
+        ],
+        "analyzedFiles": [
+          "src/client/streamableHttp.test.ts",
+          "src/client/streamableHttp.ts"
+        ],
+        "skippedFiles": [],
+        "detail": "Coverage is limited to pinned JS/TS static rules. Optional model enrichment is disabled."
+      },
+      "stages": [
+        {
+          "name": "repository",
+          "status": "completed",
+          "source": "fixture",
+          "version": "historical-git-v1",
+          "detail": "Read SHA-addressed source without executing repository code."
+        },
+        {
+          "name": "semgrep",
+          "status": "completed",
+          "source": "fixture",
+          "version": "1.144.0/local-js-ts-v1",
+          "detail": "Pinned rules; read-only, network-disabled snapshot. Scanner errors: 0."
+        },
+        {
+          "name": "model",
+          "status": "skipped",
+          "source": "fixture",
+          "version": "sha256:dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364",
+          "detail": "Model enrichment is opt-in pending held-out quality evidence."
+        }
+      ],
+      "elapsedMs": 1026,
+      "verifiedEvidence": []
+    }
+  ]
+}

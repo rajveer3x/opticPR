@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import type { Server } from 'node:http';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { beforeAll, afterAll, it, expect } from 'vitest';
 import { PrismaClient } from '../packages/database/src/index.js';
 import {
@@ -8,6 +13,7 @@ import {
   reportSchema,
   runDetailSchema,
   pullRequestListSchema,
+  type ReviewInput,
 } from '../packages/contracts/src/index.js';
 import {
   createQueue,
@@ -19,11 +25,13 @@ import { createApp } from '../apps/api/src/app.js';
 import type { DashboardGitHub } from '../apps/api/src/dashboard-auth.js';
 import { createWorker } from '../apps/worker/src/worker.js';
 import { createDispatcher } from '../apps/worker/src/dispatcher.js';
+import { scanSemgrep } from '../apps/worker/src/semgrep.js';
 import {
   lockPullRequest,
   observeLiveTarget,
 } from '../apps/worker/src/current-review.js';
-import type { GitHubClientFactory } from '../packages/repository/src/index.js';
+import { GitSnapshotAdapter, type GitHubClientFactory } from '../packages/repository/src/index.js';
+import { missingUserFixture, routePath, usersPath } from './cross-file-fixture.js';
 
 const namespace = `dashboard_${randomUUID().replaceAll('-', '')}`;
 const url = new URL(process.env.DATABASE_URL!);
@@ -41,6 +49,33 @@ let currentLogin = 'maintainer',
 const baseSha = 'a'.repeat(40),
   headSha = 'b'.repeat(40);
 let targetHead = headSha;
+const missingUserPR = 93;
+let missingUserInput: ReviewInput;
+let missingUser: GitSnapshotAdapter;
+let missingUserDirectory: string;
+async function prepareMissingUser() {
+  const fixtureInput = { source: 'github' as const, repositoryId: '200', pullRequestNumber: missingUserPR, baseSha, headSha: 'e'.repeat(40) };
+  const { adapter } = missingUserFixture(fixtureInput);
+  missingUserDirectory = await mkdtemp(join(tmpdir(), 'opticpr-dashboard-git-'));
+  const env = { ...process.env, GIT_AUTHOR_DATE: '2026-11-18T00:00:00Z', GIT_COMMITTER_DATE: '2026-11-18T00:00:00Z' };
+  const exec = promisify(execFile);
+  const git = (...args: string[]) => exec('git', ['-C', missingUserDirectory, '-c', 'core.hooksPath=/dev/null',
+    '-c', 'user.name=OpticPR fixture', '-c', 'user.email=fixture@example.invalid', ...args], { env, timeout: 5000 });
+  await git('init', '--quiet', '--template=');
+  async function commit(sha: string, title: string) {
+    for (const path of (await adapter.sourceTreeAt(sha)).paths) {
+      const file = join(missingUserDirectory, path);
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, await adapter.fileAt(sha, path));
+    }
+    await git('add', '--all');
+    await git('commit', '--quiet', '--no-gpg-sign', '-m', title);
+    return (await git('rev-parse', 'HEAD')).stdout.trim();
+  }
+  missingUserInput = { ...fixtureInput, baseSha: await commit(fixtureInput.baseSha, 'Return a missing user'),
+    headSha: await commit(fixtureInput.headSha, 'Throw on a missing user') };
+  missingUser = new GitSnapshotAdapter(missingUserDirectory, missingUserInput);
+}
 const source =
   'export function paginate(items: number[], start: number, size: number) {\n  const end = start + size - 1;\n  return items.slice(start, end);\n}\n';
 const hunk =
@@ -51,20 +86,26 @@ const clients: GitHubClientFactory = (scope, assertAccess) => ({
     return {
       repositoryId: scope.repositoryId,
       number,
-      title: 'Fix pagination boundary',
-      baseSha,
-      headSha: targetHead,
+      title: number === missingUserPR ? 'Change missing-user lookup' : 'Fix pagination boundary',
+      baseSha: number === missingUserPR ? missingUserInput.baseSha : baseSha,
+      headSha: number === missingUserPR ? missingUserInput.headSha : targetHead,
       state: 'open',
       draft: false,
     };
   },
-  async compare() {
+  async compare(base, head) {
     await assertAccess();
+    if (head === missingUserInput.headSha) return missingUser.changedFiles(base, head);
     return [{ path: 'src/paginate.ts', hunk, status: 'modified' }];
   },
-  async file() {
+  async file(sha, path) {
     await assertAccess();
+    if (path !== 'src/paginate.ts') return missingUser.fileAt(sha, path);
     return source;
+  },
+  async sourceTree(sha) {
+    await assertAccess();
+    return missingUser.sourceTreeAt(sha);
   },
 });
 const gateway: DashboardGitHub = {
@@ -142,6 +183,7 @@ async function inspect(id = runId, user = maintainer) {
 }
 beforeAll(async () => {
   process.env.MODEL_ENRICHMENT_ENABLED = '1';
+  await prepareMissingUser();
   await admin.$executeRawUnsafe(`CREATE SCHEMA "${namespace}"`);
   const migrations = new URL(
     '../packages/database/prisma/migrations/',
@@ -169,7 +211,7 @@ beforeAll(async () => {
   await queue.waitUntilReady();
   dispatcher = createDispatcher(db, queue, clients);
   worker = createWorker(db, namespace, clients, {
-    scanner: async (files) => ({
+    scanner: async (files) => files.some(file => file.path === usersPath) ? scanSemgrep(files) : ({
       errors: 0,
       scanned: files.map((file) => file.path),
       matches: [
@@ -225,11 +267,65 @@ beforeAll(async () => {
       clientSecret: 'secret',
     },
     github: gateway,
+    webDirectory: fileURLToPath(new URL('../apps/web/dist/', import.meta.url)),
   }).listen(address.port, '127.0.0.1');
   await new Promise<void>((resolve) => server.once('listening', resolve));
   maintainer = await login('maintainer');
   member = await login('member');
   findingId = (await inspect()).report!.history!.findings[0]!.findingId;
+}, 30000);
+
+it('serves worker-generated cross-file evidence through the authenticated dashboard', async () => {
+  const scope = await repositoryScope(db, '100', '200');
+  process.env.MODEL_ENRICHMENT_ENABLED = '0';
+  let id: string;
+  try {
+    const target = await db.$transaction(async tx => {
+      await lockPullRequest(tx, scope, missingUserPR);
+      return observeLiveTarget(tx, scope, missingUserPR, clients(scope, async () => {}));
+    });
+    id = target!.run.id;
+    await dispatcher.tick();
+    await waitForReport(db, id);
+  } finally { process.env.MODEL_ENRICHMENT_ENABLED = '1'; }
+  const data = await inspect(id, member);
+  expect(data.pullRequest.latestRunId).toBe(id);
+  expect(data.report!.coverage.status).toBe('complete');
+  const [finding] = data.report!.findings;
+  expect(data.report!.findings).toHaveLength(1);
+  expect(finding!.citations?.map(citation => [citation.role, citation.evidence.path, citation.evidence.revision])).toEqual([
+    ['changed-throw', usersPath, missingUserInput.headSha], ['caller-fallback', routePath, missingUserInput.headSha], ['base-return', usersPath, missingUserInput.baseSha],
+  ]);
+  expect(await db.inlinePublication.findMany({ where: { runId: id }, select: { path: true, line: true, state: true } })).toEqual([
+    { path: usersPath, line: 4, state: 'pending' },
+  ]);
+
+  if (process.env.OPTICPR_TEST_LIVE_BROWSER !== '1') return;
+  const { chromium } = await import('@playwright/test');
+  const browser = await chromium.launch();
+  try {
+    const context = await browser.newContext();
+    await context.addCookies([{ name: 'opticpr_session', value: member.cookie.split('=')[1]!, url: origin }]);
+    const page = await context.newPage();
+    const runResponse = page.waitForResponse(response => response.url() === `${origin}/api/runs/${id}` && response.ok());
+    await page.goto(`${origin}/runs/${id}?finding=${finding!.id}`);
+    expect((await (await runResponse).json()).report.findings[0].citations).toEqual(finding!.citations);
+    const link = page.getByRole('link', { name: 'View source' });
+    const verify = async (side: string, expected: string, sha: string, path: string, lines: string) => {
+      const pane = page.getByRole('region', { name: new RegExp(`Evidence at ${side} lines`) });
+      await pane.waitFor();
+      expect(await pane.innerText()).toContain(expected);
+      expect(await link.getAttribute('href')).toBe(`https://github.com/acme/pagination/blob/${sha}/${path}#${lines}`);
+    };
+    await verify('head', 'throw new Error', missingUserInput.headSha, usersPath, 'L4-L4');
+    await page.getByRole('button', { name: 'Caller fallback' }).click();
+    await verify('head', 'return { status: 404 }', missingUserInput.headSha, routePath, 'L3-L4');
+    await page.getByRole('button', { name: 'Previous return' }).click();
+    await verify('base', 'return undefined', missingUserInput.baseSha, usersPath, 'L4-L4');
+    await page.getByRole('button', { name: 'Caller fallback' }).click();
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await page.screenshot({ path: 'output/09-live-dashboard.png', fullPage: true, animations: 'disabled' });
+  } finally { await browser.close(); }
 }, 30000);
 afterAll(async () => {
   delete process.env.MODEL_ENRICHMENT_ENABLED;
@@ -241,6 +337,7 @@ afterAll(async () => {
   await db.$disconnect();
   await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${namespace}" CASCADE`);
   await admin.$disconnect();
+  if (missingUserDirectory) await rm(missingUserDirectory, { recursive: true, force: true });
 }, 30000);
 
 it('checks OAuth state, sets HttpOnly cookies and stores encrypted credentials', async () => {
@@ -298,8 +395,9 @@ it('serves only accessible repositories and reads the current summary through la
     headers: { cookie: member.cookie },
   });
   const body = pullRequestListSchema.parse(await list.json());
-  expect(body.items[0]!.latestRunId).toBe(runId);
-  expect(body.items[0]!.latestRun!.coverage).toBe('partial');
+  const pagination = body.items.find(item => item.number === 42);
+  expect(pagination!.latestRunId).toBe(runId);
+  expect(pagination!.latestRun!.coverage).toBe('partial');
   const report = await inspect(runId, member);
   expect(report.repository.role).toBe('member');
   expect(report.report!.findings[0]!.evidence).toMatchObject({

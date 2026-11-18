@@ -7,7 +7,9 @@ import { analyzeLocal, type AnalysisServices } from './local-analysis.js';
 import { finalizeGitHubReview } from './current-review.js';
 import { snapshotFindingHistory } from './finding-history.js';
 
-export function createWorker(db: PrismaClient, name = queueName, clients: GitHubClientFactory = githubClientsFromEnv(), services: AnalysisServices = {}) {
+export function createWorker(db: PrismaClient, name = queueName, clients: GitHubClientFactory = githubClientsFromEnv(),
+  services: AnalysisServices & { historicalSnapshot?: (input: ReturnType<typeof inputSchema.parse>) => RepositoryAdapter } = {},
+) {
   const worker = new Worker(name, async job => {
     const { runId } = queueJobSchema.parse(job.data);
     const started = Date.now();
@@ -29,7 +31,9 @@ export function createWorker(db: PrismaClient, name = queueName, clients: GitHub
         githubClient = clients(scope, assertAccess);
         adapter = new GitHubRepositoryAdapter(scope, input.pullRequestNumber, githubClient, input);
       } else {
-        if (configuration.adapter === 'evaluation-bundle-v1') adapter = await FixtureRepositoryAdapter.openEvaluation(input);
+        if (configuration.adapter === 'historical-git-v1' && services.historicalSnapshot) adapter = services.historicalSnapshot(input);
+        else if (configuration.adapter === 'review-demo-bundle-v1') adapter = await FixtureRepositoryAdapter.openReviewDemo(input);
+        else if (configuration.adapter === 'evaluation-bundle-v1') adapter = await FixtureRepositoryAdapter.openEvaluation(input);
         else {
           if (configuration.adapter !== 'pagination-bundle-v1') throw new Error('Invalid fixture configuration');
           adapter = await FixtureRepositoryAdapter.open(input);

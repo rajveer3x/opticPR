@@ -1,16 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { githubConfig, reportSchema, type GitHubScope } from '../packages/contracts/src/index.js';
+import { githubConfig, reportSchema, type GitHubScope, type ReviewInput } from '../packages/contracts/src/index.js';
 import { Prisma, PrismaClient } from '../packages/database/src/index.js';
 import { FixtureRepositoryAdapter, type GitHubPublicationClientFactory, type ReviewComment } from '../packages/repository/src/index.js';
-import { createQueue, enqueueRun, repositoryScope, waitForReport, type Worker } from '../packages/runtime/src/index.js';
+import { createQueue, enqueueRun, repositoryScope, runIdentity, waitForReport, type Worker } from '../packages/runtime/src/index.js';
 import { createWorker } from '../apps/worker/src/worker.js';
 import { createPublisher } from '../apps/worker/src/publication.js';
 import { lockPullRequest, observeLiveTarget } from '../apps/worker/src/current-review.js';
 import { scanSemgrep, type StaticScanner } from '../apps/worker/src/semgrep.js';
 import { withInferenceSlot, type InferenceClient } from '../apps/worker/src/inference.js';
 import { analyzeLocal } from '../apps/worker/src/local-analysis.js';
+import { snapshotFindingHistory } from '../apps/worker/src/finding-history.js';
+import { missingUserFixture, routePath, usersPath } from './cross-file-fixture.js';
 
 const namespace = `analysis_test_${randomUUID().replaceAll('-', '')}`;
 const url = new URL(process.env.DATABASE_URL!); url.searchParams.set('schema', namespace);
@@ -188,7 +190,6 @@ it('runs the actual pinned Semgrep rules in the read-only network-disabled conta
 
 it('records file and changed-line limits and filters excluded source before scanning', async () => {
   const input = { source: 'github' as const, repositoryId: '200', pullRequestNumber: 6, baseSha: 'a'.repeat(40), headSha: 'b'.repeat(40) };
-  const { runIdentity } = await import('../packages/runtime/src/index.js');
   const identity = runIdentity(input, githubConfig);
   const run = await db.reviewRun.create({ data: { ...input, ...identity, configuration: githubConfig, state: 'running' } });
   const changes = [
@@ -207,7 +208,6 @@ it('records file and changed-line limits and filters excluded source before scan
 
 
 it('keeps model inference opt-in while reporting complete static coverage', async () => {
-  const { runIdentity } = await import('../packages/runtime/src/index.js');
   const input = { source: 'github' as const, repositoryId: '200', pullRequestNumber: 99, baseSha: 'a'.repeat(40), headSha: 'b'.repeat(40) };
   const identity = runIdentity(input, githubConfig);
   const run = await db.reviewRun.create({ data: { ...input, ...identity, configuration: githubConfig, state: 'running' } });
@@ -217,4 +217,46 @@ it('keeps model inference opt-in while reporting complete static coverage', asyn
   expect(report.findings).toHaveLength(1);
   expect(report.coverage.status).toBe('complete');
   expect(report.enrichment).toMatchObject({ status: 'skipped', accepted: 0, rejected: 0 });
+});
+
+it.each(['return', 'handler'] as const)('preserves a prior cross-file finding during incomplete scans and clears it after the %s fix', async fixed => {
+  const input: ReviewInput = { source: 'github', repositoryId: '200', pullRequestNumber: fixed === 'return' ? 90 : 91, baseSha: 'a'.repeat(40), headSha: 'b'.repeat(40) };
+  async function check(head: string, options?: Parameters<typeof missingUserFixture>[1]) {
+    const revisions = { ...input, headSha: head.repeat(40) };
+    const identity = runIdentity(revisions, githubConfig);
+    const run = await db.reviewRun.create({ data: { ...revisions, ...identity, configuration: githubConfig, state: 'running' } });
+    const { adapter } = missingUserFixture(revisions, options);
+    const report = await analyzeLocal(db, adapter, revisions, githubConfig, { ...identity, runId: run.id }, {
+      scanner: async files => ({ scanned: files.map(file => file.path), errors: 0, matches: [] }),
+    });
+    const observations = await db.runObservation.findMany({ where: { runId: run.id } });
+    expect(observations.map(row => row.finding)).toEqual(report.findings);
+    const checkpoint = await db.reviewRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(checkpoint.staticCheckpoint).toMatchObject({ report: { crossFileRecheck: report.crossFileRecheck } });
+    return db.$transaction(tx => snapshotFindingHistory(tx, report));
+  }
+
+  const flagged = await check('b');
+  expect(flagged.coverage.status).toBe('complete');
+  expect(flagged.findings).toHaveLength(1);
+  expect(flagged.stages.find(stage => stage.name === 'cross-file')).toMatchObject({ status: 'completed' });
+  const finding = flagged.findings[0]!;
+
+  const unavailable = await check('c', { fixed, callerUnavailable: true });
+  expect(unavailable.coverage).toMatchObject({ status: 'partial', skippedFiles: expect.arrayContaining([{ path: routePath, reason: 'TypeScript head source unavailable' }]) });
+  expect(unavailable.findings).toHaveLength(0);
+  expect(unavailable.history?.findings).toMatchObject([{ state: 'needs_verification', lastObservation: finding }]);
+
+  const extra = Object.fromEntries(Array.from({ length: 41 }, (_, i) => [`src/extra${i}.ts`, 'export {};']));
+  const budget = await check('d', { fixed, extra });
+  expect(budget.coverage.status).toBe('partial');
+  expect(budget.coverage.skippedFiles).toContainEqual({ path: '.', reason: expect.stringContaining('caller budget exhausted') });
+  expect(budget.crossFileRecheck).toMatchObject({ completed: false, callees: expect.arrayContaining([usersPath]), callers: expect.arrayContaining([routePath]) });
+  expect(budget.history?.findings).toMatchObject([{ state: 'needs_verification', lastObservation: finding }]);
+
+  const resolved = await check('e', { fixed });
+  expect(resolved.coverage.status).toBe('complete');
+  expect(resolved.findings).toHaveLength(0);
+  expect(resolved.history?.findings).toMatchObject([{ state: 'cleared_by_recheck', findingId: finding.id, lastObservation: finding }]);
+  if (fixed === 'return') expect(resolved.comparison).toEqual([]);
 });

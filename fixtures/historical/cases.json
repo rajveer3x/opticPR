@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "reservedOn": "2026-11-18",
+  "split": "held-out",
+  "repositories": ["sindresorhus/ky", "modelcontextprotocol/typescript-sdk"],
+  "labelReview": {
+    "status": "provisional",
+    "independentReviewer": null,
+    "disagreements": []
+  },
+  "cases": [
+    {
+      "id": "ky-abort-signal-regression",
+      "repository": "sindresorhus/ky",
+      "number": 683,
+      "baseSha": "b49cd03d8673ea522a29bae4ef6b4672cf23201b",
+      "headSha": "e48386e70144bfb7ccd2264ab5760b154048cf48",
+      "reference": "https://github.com/sindresorhus/ky/pull/683",
+      "labels": [
+        {
+          "id": "unsupported-abort-signal-any",
+          "report": "https://github.com/sindresorhus/ky/issues/688",
+          "fix": "https://github.com/sindresorhus/ky/pull/711",
+          "fixSha": "24eec6fef2db724153915a1f80098216fe7571a8",
+          "expected": "Older Safari can have AbortController and an input signal without AbortSignal.any. Request construction should skip combining signals when that API is absent instead of throwing.",
+          "evidence": [{ "path": "source/core/Ky.ts", "startLine": 170, "endLine": 174 }]
+        }
+      ]
+    },
+    {
+      "id": "ky-abort-signal-guard",
+      "repository": "sindresorhus/ky",
+      "number": 711,
+      "baseSha": "3207ecc30677fea718b8206a1bd9d3ea152a9975",
+      "headSha": "24eec6fef2db724153915a1f80098216fe7571a8",
+      "reference": "https://github.com/sindresorhus/ky/pull/711",
+      "cleanBehavior": "The constructor checks whether AbortSignal.any exists before entering the branch that combines signals. Requests without that API can proceed, with the documented timeout limitation.",
+      "labels": []
+    },
+    {
+      "id": "mcp-empty-sse-regression",
+      "repository": "modelcontextprotocol/typescript-sdk",
+      "number": 1129,
+      "baseSha": "b59a2bde7d134f1c5b834fe33df71e45e54c1ba5",
+      "headSha": "3c50d07e9f390751df4f6da87fde369074c41e6c",
+      "reference": "https://github.com/modelcontextprotocol/typescript-sdk/pull/1129",
+      "labels": [
+        {
+          "id": "empty-sse-priming-event-parsed-as-json",
+          "report": "https://github.com/modelcontextprotocol/typescript-sdk/pull/1184",
+          "fix": "https://github.com/modelcontextprotocol/typescript-sdk/pull/1184",
+          "fixSha": "9203091219db5e90e5f66a3e1492706a15feab39",
+          "expected": "A server-sent event with a resumption ID and an empty data field should record the ID and skip JSON parsing. The change introduces that event, which reaches JSON.parse in the client when the event name is absent.",
+          "evidence": [
+            { "path": "src/server/streamableHttp.ts", "startLine": 279, "endLine": 289 },
+            { "path": "src/client/streamableHttp.ts", "startLine": 331, "endLine": 349 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mcp-empty-sse-guard",
+      "repository": "modelcontextprotocol/typescript-sdk",
+      "number": 1184,
+      "baseSha": "b9538a222a6042188e52fc92b54becd304c15d57",
+      "headSha": "9203091219db5e90e5f66a3e1492706a15feab39",
+      "reference": "https://github.com/modelcontextprotocol/typescript-sdk/pull/1184",
+      "cleanBehavior": "The client saves the resumption ID, skips events with empty data before JSON parsing, and proceeds to the next event. The upstream regression test sends an empty event followed by a real message.",
+      "labels": []
+    }
+  ]
+}

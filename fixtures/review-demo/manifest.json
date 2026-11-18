@@ -1,0 +1,16 @@
+{
+  "regression": {
+    "source": "fixture",
+    "repositoryId": "fixture/missing-user",
+    "pullRequestNumber": 1,
+    "baseSha": "fb8a50ac04e25e4024e7450e46fc7d415c832560",
+    "headSha": "ea3e1f1933b3b772ea757e0602937c5743c00e70"
+  },
+  "fix": {
+    "source": "fixture",
+    "repositoryId": "fixture/missing-user",
+    "pullRequestNumber": 1,
+    "baseSha": "fb8a50ac04e25e4024e7450e46fc7d415c832560",
+    "headSha": "3de34eee4e8a0f0f5c919c40a26d1e9ad97e5636"
+  }
+}

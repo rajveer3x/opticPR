@@ -23,13 +23,15 @@ const restoredDb = new PrismaClient({ datasourceUrl: restoredUrl.toString() });
 const temp = await mkdtemp(join(tmpdir(), 'opticpr-recovery-'));
 const fixture = await FixtureRepositoryAdapter.open();
 const timeline = JSON.parse(await readFile(new URL('../fixtures/pagination/history.json', import.meta.url), 'utf8'));
+const fixtureInput = await fixture.revisions();
+const fixtures = new Map([[fixtureInput.headSha, fixture]]);
 const events = [], remote = [], threads = [];
 const secret = randomUUID();
 let headSha = timeline.scenarios.original, compareGate, scannerSkipped = false, remoteCreates = 0;
 const clients = (scope, assertAccess) => ({
   async pullRequest(number) { await assertAccess(); return { number, repositoryId: scope.repositoryId, baseSha: timeline.baseSha, headSha, state: 'open', draft: false, title: 'Synthetic recovery PR' }; },
-  async compare(base, head) { await assertAccess(); await compareGate?.(head); return fixture.changedFiles(base, head); },
-  async file(sha, path) { await assertAccess(); return fixture.fileAt(sha, path); },
+  async compare(base, head) { await assertAccess(); await compareGate?.(head); return fixtures.get(head).changedFiles(base, head); },
+  async file(sha, path) { await assertAccess(); return (sha === fixtureInput.baseSha ? fixture : fixtures.get(sha)).fileAt(sha, path); },
   async comments() { await assertAccess(); return structuredClone(remote); },
   async createComment(number, body) { await assertAccess(); remoteCreates++; const id = 'mock-summary-1'; remote.push({ id, body, appOwned: true }); return id; },
   async updateComment(id, body) { await assertAccess(); remote.find(comment => comment.id === id).body = body; },
@@ -58,6 +60,9 @@ async function dispatch() {
 }
 const gate = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, release: resolve }; };
 try {
+  for (const headSha of Object.values(timeline.scenarios)) {
+    if (!fixtures.has(headSha)) fixtures.set(headSha, await FixtureRepositoryAdapter.open({ ...fixtureInput, headSha }));
+  }
   await admin.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
   const directory = new URL('../packages/database/prisma/migrations/', import.meta.url);
   for (const name of (await readdir(directory)).filter(name => /^\d/.test(name)).sort()) {
@@ -118,7 +123,7 @@ try {
   release?.(); compareGate = undefined;
   await second?.close(); await worker?.close(); await dispatcher?.close(); await publisher?.close();
   if (server) await new Promise(resolve => server.close(resolve));
-  await queue.obliterate({ force: true }); await queue.close(); await fixture.close();
+  await queue.obliterate({ force: true }); await queue.close(); await Promise.all([...fixtures.values()].map(adapter => adapter.close()));
   await sourceDb.$disconnect(); await restoredDb.$disconnect();
   await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await admin.$disconnect();
   await postgres('dropdb', ['--if-exists', database]); await rm(temp, { recursive: true, force: true });

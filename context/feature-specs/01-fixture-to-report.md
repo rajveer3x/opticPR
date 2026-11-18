@@ -10,3 +10,7 @@
 - Replay the same input and configuration twice. The logical run key resolves to one run.
 - In clean CI, use the frozen lockfile, build compiled shared packages in dependency order, then type-check API and worker. Verify success without restored dist output.
 - Stop PostgreSQL. Readiness identifies the failed dependency and replay cannot report success.
+
+## Teach me after implementation
+
+Follow one fixture replay from its Git revisions through the queue to the stored report. Show how replaying the input selects the same run. Add the walkthrough to this file and explain it to me in chat using the [project teaching instructions](../../AGENTS.md).
