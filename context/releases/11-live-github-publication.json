@@ -1,0 +1,25 @@
+{
+  "verifiedAt": "2026-11-18T15:42:41.612Z",
+  "sandbox": "rajveer3x/opticpr-test",
+  "pullRequestUrl": "https://github.com/rajveer3x/opticpr-test/pull/6",
+  "baseSha": "8f5a1b802c9c9107da8858e8b5cd7894d39e3311",
+  "headSha": "3e75e5d872df4a97964492ed89aa983fca65c6bc",
+  "runId": "8801796c-dc27-4058-911b-d1eb7b51875d",
+  "coverage": "complete",
+  "ruleId": "opticpr.ts-missing-value-throws",
+  "path": "review-smoke/users.ts",
+  "line": 4,
+  "summaryUrl": "https://github.com/rajveer3x/opticpr-test/pull/6#issuecomment-6983450505",
+  "inlineUrl": "https://github.com/rajveer3x/opticpr-test/pull/6#discussion_r4616672744",
+  "first": {
+    "summaryCommentId": "6983450505",
+    "inlineCommentId": "4616672744",
+    "reviewId": "5959900819"
+  },
+  "retry": {
+    "summaryCommentId": "6983450505",
+    "inlineCommentId": "4616672744",
+    "reviewId": "5959900819"
+  },
+  "reproduction": "Local queue trigger and normal worker and publisher. App-authored comments verified through the real GitHub API."
+}

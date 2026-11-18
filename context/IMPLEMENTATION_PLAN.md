@@ -1,6 +1,6 @@
 # Implementation plan
 
-**Current state:** All eleven features are implemented for the local portfolio scope. Local acceptance used PostgreSQL, Redis, the pinned Semgrep scanner, and mocked GitHub. The historical benchmark has recorded results and its labels await a second reviewer. The public preview was retired at the owner’s request. [Benchmark reviewer handoff](benchmarks/10-historical/label-review.md) · [Recorded local demo](feature-specs/11-local-review-demo.md)
+**Current state:** All eleven features are implemented for the local portfolio scope. The local test suite passed with PostgreSQL, Redis, the pinned Semgrep scanner, and mocked GitHub. Hosted CI passed on the implementation commit, and a separate sandbox run verified real GitHub summary and inline publication. [Hosted CI run](https://github.com/rajveer3x/opticPR/actions/runs/44338197807) · [Sandbox evidence](releases/11-live-github-publication.json) The historical benchmark has recorded results and its labels await a second reviewer. The public preview was retired at the owner’s request. [Benchmark reviewer handoff](benchmarks/10-historical/label-review.md) · [Recorded local demo](feature-specs/11-local-review-demo.md)
 
 | Order | Milestone | Dependency | Exit evidence |
 | --- | --- | --- | --- |
